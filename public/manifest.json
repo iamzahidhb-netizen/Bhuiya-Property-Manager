@@ -1,0 +1,51 @@
+{
+  "name": "Anwar Bhuiyan Property",
+  "short_name": "Anwar Property",
+  "description": "পারিবারিক সম্পত্তি, ফ্ল্যাট ভাড়াটিয়া, মাসিক আয়-ব্যয় এবং স্বচ্ছ মুনাফা বণ্টন ও রিজার্ভ ফান্ডের সমন্বিত প্ল্যাটফর্ম",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0fdf4",
+  "theme_color": "#f0fdf4",
+  "lang": "bn",
+  "dir": "ltr",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

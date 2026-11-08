@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "./styles/liquid-glass.css";
+
+@media print {
+  body {
+    background: white !important;
+    color: #1e293b !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .page-break {
+    page-break-after: always;
+  }
+}
+
+.print-only {
+  display: none;
+}

@@ -1,0 +1,218 @@
+  return (
+    <div className="min-h-screen ambient-emerald-bg flex flex-col text-slate-800 dark:text-slate-100 pb-28 sm:pb-32 antialiased relative overflow-x-hidden transition-colors duration-300">
+      {/* Decorative Luminous Wave Ribbons in Background */}
+      <BackgroundWaves />
+
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER                                                             */}
+      {/* ========================================================================= */}
+      <header className="sticky top-0 z-40 bg-white/75 dark:bg-[rgba(6,23,22,0.85)] backdrop-blur-xl border-b border-white/60 dark:border-emerald-500/20 shadow-xs transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          {/* Official Brand Logo & Name */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white dark:bg-emerald-950/70 p-1.5 shadow-md shadow-emerald-700/15 dark:shadow-[0_0_15px_rgba(16,217,154,0.2)] border border-emerald-100 dark:border-emerald-500/30 flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src="/brand/anwar-bhuiyan-property.svg"
+                alt="Anwar Bhuiyan Property Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight tracking-tight">
+                {isBengali ? 'আনোয়ার ভূঁইয়া প্রপার্টি' : 'Anwar Bhuiyan Property'}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-emerald-300/80 font-medium">
+                {isBengali ? 'পারিবারিক ডিজিটাল প্রপার্টি ও আর্থিক ব্যবস্থাপনা' : 'Property & Family Finance Management'}
+              </p>
+            </div>
+          </div>
+
+          {/* Right Controls: Desktop Nav Pills & Compact Language Selector & Theme Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Desktop 3-Section Floating Liquid Glass Navigation Dock */}
+            <LiquidGlass
+              as="div"
+              className="hidden md:flex items-center gap-1.5 p-1 rounded-full border border-white/80 dark:border-emerald-500/25 shadow-sm bg-white/75 dark:bg-emerald-950/40"
+              scale={-70}
+              chroma={4}
+              blur={6}
+            >
+              <button
+                onClick={() => {
+                  setActiveSection('home');
+                  setDrillDownView(null);
+                }}
+                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                  activeSection === 'home' && !drillDownView
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-white/60 dark:hover:bg-emerald-900/40'
+                }`}
+              >
+                <House className="w-3.5 h-3.5" />
+                <span>{t('navigation.home')}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveSection('accounts');
+                  setDrillDownView(null);
+                }}
+                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                  activeSection === 'accounts' && !drillDownView
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-white/60 dark:hover:bg-emerald-900/40'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>{t('navigation.accounts')}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveSection('profile');
+                  setDrillDownView(null);
+                }}
+                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                  activeSection === 'profile' && !drillDownView
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-white/60 dark:hover:bg-emerald-900/40'
+                }`}
+              >
+                <UserRound className="w-3.5 h-3.5" />
+                <span>{t('navigation.profile')}</span>
+              </button>
+            </LiquidGlass>
+
+            {/* Language Switcher in Header */}
+            <LanguageSelector compact />
+
+            {/* Theme Toggle in Header */}
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
+
+      {/* ========================================================================= */}
+      {/* 2. MAIN CONTAINER & SUB-VIEWS / SECTIONS                                 */}
+      {/* ========================================================================= */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-8 flex-1 w-full space-y-6">
+        {/* Drill-down Back Button if inside a detailed view */}
+        {drillDownView && (
+          <div className="flex items-center justify-between bg-white/80 dark:bg-emerald-950/60 p-3 rounded-2xl border border-slate-200 dark:border-emerald-500/20 shadow-xs">
+            <button
+              onClick={() => setDrillDownView(null)}
+              className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:underline transition cursor-pointer"
+            >
+              <span>{t('common.backToKhata')}</span>
+            </button>
+            <span className="text-xs text-slate-400 dark:text-emerald-300/60 font-medium">বিস্তারিত মডিউল ভিউ</span>
+          </div>
+        )}
+
+        {/* --------------------------------------------------------------------- */}
+        {/* DRILL DOWN VIEWS (When user clicks drill down or test triggers tab)    */}
+        {/* --------------------------------------------------------------------- */}
+        {drillDownView === 'properties' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <PropertyManagementView ownerUid={currentOwnerUid} workspaceId={workspaceId} />
+          </Suspense>
+        )}
+
+        {drillDownView === 'tenants' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <TenantManagementView
+              ownerUid={currentOwnerUid}
+              properties={properties}
+              units={units}
+              workspaceId={workspaceId}
+            />
+          </Suspense>
+        )}
+
+        {drillDownView === 'rent' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <RentManagementView
+              ownerUid={currentOwnerUid}
+              properties={properties}
+              units={units}
+              tenants={tenants}
+            />
+          </Suspense>
+        )}
+
+        {drillDownView === 'expenses' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ExpenseManagementView ownerUid={currentOwnerUid} properties={properties} />
+          </Suspense>
+        )}
+
+        {drillDownView === 'distribution' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <DistributionManagementView ownerUid={currentOwnerUid} />
+          </Suspense>
+        )}
+
+        {drillDownView === 'reports' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ReportsAnalyticsView ownerUid={currentOwnerUid} />
+          </Suspense>
+        )}
+
+        {/* --------------------------------------------------------------------- */}
+        {/* SECTION 1: হোম (HOME DASHBOARD)                                       */}
+        {/* --------------------------------------------------------------------- */}
+        {!drillDownView && activeSection === 'home' && (
+          <div className="space-y-4 sm:space-y-5">
+            {/* Top Welcome Section with Architectural Pencil-Sketch Illustration */}
+            <div className="relative pt-1 pb-2 px-1 min-h-[90px] sm:min-h-[110px] flex items-center justify-between">
+              {/* Left: Greeting & Role Badge */}
+              <div className="relative z-10 space-y-1">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  {isBengali ? 'স্বাগতম, ' : 'Welcome, '}
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    {userName}
+                  </span>
+                </h2>
+                <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600 dark:text-emerald-200/80">
+                  {isMasterAdmin && (
+                    <Crown className="w-4 h-4 text-amber-500 fill-amber-500/20 shrink-0" />
+                  )}
+                  <span>
+                    {isMasterAdmin
+                      ? (isBengali ? 'মাস্টার অ্যাডমিন' : 'Master Admin')
+                      : role === 'manager'
+                      ? (isBengali ? 'ম্যানেজার' : 'Manager')
+                      : (isBengali ? 'দর্শক' : 'Viewer')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Architectural House Pencil-Sketch Illustration */}
+              <ArchitecturalHouseIllustration />
+            </div>
+
+            {/* 1. Date & Notification Card */}
+            <DateNotificationCard hasUnreadNotifications={true} />
+
+            {/* 2. Four Financial Summary Cards in 2x2 Grid */}
+            <FinancialSummaryCards
+              totalRentCollected={totalRentCollected}
+              totalRentDue={totalRentDue}
+              totalExpenses={totalExpenses}
+              cashInHand={cashInHand}
+              useBanglaNumerals={preferences.useBanglaNumerals}
+            />
+
+            {/* 3. Property Summary Section (সম্পত্তি সারসংক্ষেপ) */}
+            <PropertySummaryCard
+              propertiesCount={properties.length}
+              unitsCount={activeUnits.length}
+              tenantsCount={activeTenants.length}
+              onNavigateToAccounts={() => {
+                setActiveSection('accounts');
+                setDrillDownView(null);
+              }}
+              useBanglaNumerals={preferences.useBanglaNumerals}
+            />
+          </div>
+        )}

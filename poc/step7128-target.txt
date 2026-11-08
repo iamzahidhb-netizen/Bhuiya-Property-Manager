@@ -1,0 +1,6 @@
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+
+/* Floating Nav Item */
+.liquid-glass-nav-item {

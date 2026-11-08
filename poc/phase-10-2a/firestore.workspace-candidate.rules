@@ -1,0 +1,150 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS (Workspace Membership, RBAC & Isolation)
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Checks whether the authenticated caller is an active member of the target workspace
+    function isWorkspaceMember(workspaceId) {
+      let memberDocPath = /databases/$(database)/documents/workspace_members/$(workspaceId + '_' + request.auth.uid);
+      return isAuthenticated() &&
+             exists(memberDocPath) &&
+             get(memberDocPath).data.status == 'active';
+    }
+
+    // Checks whether the member holds the 'master_admin' role
+    function isMasterAdmin(workspaceId) {
+      let memberDocPath = /databases/$(database)/documents/workspace_members/$(workspaceId + '_' + request.auth.uid);
+      return isWorkspaceMember(workspaceId) &&
+             get(memberDocPath).data.role == 'master_admin';
+    }
+
+    // Dual authorization reader check:
+    // Supports both modern workspaceId shared access AND legacy ownerUid backward compatibility
+    function isAuthorizedReader() {
+      return isAuthenticated() &&
+             resource != null &&
+             (('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)) ||
+              ('ownerUid' in resource.data && resource.data.ownerUid == request.auth.uid));
+    }
+
+    // =========================================================================
+    // 1. WORKSPACES & MEMBERSHIP (Multi-User Family Workspace)
+    // =========================================================================
+
+    match /workspaces/{workspaceId} {
+      allow read: if isWorkspaceMember(workspaceId);
+      // All workspace settings changes must route through trusted backend functions
+      allow write: if false;
+    }
+
+    match /workspace_members/{memberId} {
+      // Members can read their own profile; Master Admin can read all member profiles
+      // Authenticated users can read their own member document (even if it does not exist yet)
+      allow read: if isAuthenticated() && (
+                     memberId.matches('^.*_' + request.auth.uid + '$') ||
+                     (resource != null && resource.data.uid == request.auth.uid) ||
+                     (resource != null && 'workspaceId' in resource.data && isMasterAdmin(resource.data.workspaceId))
+                  );
+      // Prohibit direct client creation, editing, or deletion of membership records
+      // Invitations, role changes, and deactivations must route through trusted backend functions
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 2. PROPERTIES & UNITS (Shared Family Access)
+    // =========================================================================
+
+    match /properties/{propertyId} {
+      allow read: if isAuthorizedReader();
+      // Direct client property modifications blocked; managed via server
+      allow write: if false;
+    }
+
+    match /units/{unitId} {
+      allow read: if isAuthorizedReader();
+      // Unit creations, renames, archives, and status mutations blocked from client
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 3. TENANTS & LEASE MANAGEMENT
+    // =========================================================================
+
+    match /tenants/{tenantId} {
+      allow read: if isAuthorizedReader();
+      // Atomic multi-document leases managed via server functions only
+      allow write: if false;
+    }
+
+    match /security_deposits/{depositId} {
+      allow read: if isAuthorizedReader();
+      // Balance-sheet liabilities managed atomically; no direct client mutations
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 4. RENT BILLING & PAYMENTS
+    // =========================================================================
+
+    match /rent_bills/{billId} {
+      allow read: if isAuthorizedReader();
+      // Monthly billing managed exclusively via trusted server functions
+      allow write: if false;
+    }
+
+    match /rent_payments/{paymentId} {
+      allow read: if isAuthorizedReader();
+      // Payments recorded atomically with bill reconciliation via server functions
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 5. EXPENSES & FINANCIAL LEDGERS
+    // =========================================================================
+
+    match /expenses/{expenseId} {
+      allow read: if isAuthorizedReader();
+      // Operating expenses and audit trails managed via server functions
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 6. BENEFICIARIES, FAMILY DISTRIBUTIONS & RESERVE FUND
+    // =========================================================================
+
+    match /beneficiaries/{beneficiaryId} {
+      allow read: if isAuthorizedReader();
+      allow write: if false;
+    }
+
+    match /family_distributions/{distributionId} {
+      allow read: if isAuthorizedReader();
+      // Monthly snapshots and payouts managed via server functions
+      allow write: if false;
+    }
+
+    match /reserve_funds/{reserveFundId} {
+      allow read: if isAuthorizedReader();
+      // Balance management managed via server functions
+      allow write: if false;
+    }
+
+    match /reserve_ledger/{entryId} {
+      allow read: if isAuthorizedReader();
+      // Append-only ledger; direct client writes strictly prohibited
+      allow write: if false;
+    }
+
+    match /reserve_fund_transactions/{txId} {
+      allow read: if isAuthorizedReader();
+      allow write: if false;
+    }
+  }
+}

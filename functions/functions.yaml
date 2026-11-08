@@ -1,0 +1,87 @@
+specVersion: v1alpha1
+requiredAPIs: []
+endpoints:
+  createUnitCallable:
+    platform: gcfv2
+    entryPoint: createUnitCallable
+    callableTrigger: {}
+  renameUnitCallable:
+    platform: gcfv2
+    entryPoint: renameUnitCallable
+    callableTrigger: {}
+  archiveUnitCallable:
+    platform: gcfv2
+    entryPoint: archiveUnitCallable
+    callableTrigger: {}
+  restoreUnitCallable:
+    platform: gcfv2
+    entryPoint: restoreUnitCallable
+    callableTrigger: {}
+  registerTenantCallable:
+    platform: gcfv2
+    entryPoint: registerTenantCallable
+    callableTrigger: {}
+  vacateTenantCallable:
+    platform: gcfv2
+    entryPoint: vacateTenantCallable
+    callableTrigger: {}
+  generateMonthlyBillsCallable:
+    platform: gcfv2
+    entryPoint: generateMonthlyBillsCallable
+    callableTrigger: {}
+  recordRentPaymentCallable:
+    platform: gcfv2
+    entryPoint: recordRentPaymentCallable
+    callableTrigger: {}
+  createExpenseCallable:
+    platform: gcfv2
+    entryPoint: createExpenseCallable
+    callableTrigger: {}
+  updateExpenseCallable:
+    platform: gcfv2
+    entryPoint: updateExpenseCallable
+    callableTrigger: {}
+  reverseExpenseCallable:
+    platform: gcfv2
+    entryPoint: reverseExpenseCallable
+    callableTrigger: {}
+  seedDefaultBeneficiariesCallable:
+    platform: gcfv2
+    entryPoint: seedDefaultBeneficiariesCallable
+    callableTrigger: {}
+  createBeneficiaryCallable:
+    platform: gcfv2
+    entryPoint: createBeneficiaryCallable
+    callableTrigger: {}
+  updateBeneficiaryCallable:
+    platform: gcfv2
+    entryPoint: updateBeneficiaryCallable
+    callableTrigger: {}
+  archiveBeneficiaryCallable:
+    platform: gcfv2
+    entryPoint: archiveBeneficiaryCallable
+    callableTrigger: {}
+  getOrCreateMonthlyDistributionCallable:
+    platform: gcfv2
+    entryPoint: getOrCreateMonthlyDistributionCallable
+    callableTrigger: {}
+  applySpecialAdjustmentCallable:
+    platform: gcfv2
+    entryPoint: applySpecialAdjustmentCallable
+    callableTrigger: {}
+  recordBeneficiaryPayoutCallable:
+    platform: gcfv2
+    entryPoint: recordBeneficiaryPayoutCallable
+    callableTrigger: {}
+  initializeReserveFundCallable:
+    platform: gcfv2
+    entryPoint: initializeReserveFundCallable
+    callableTrigger: {}
+  withdrawFromReserveCallable:
+    platform: gcfv2
+    entryPoint: withdrawFromReserveCallable
+    callableTrigger: {}
+  transferSurplusToReserveCallable:
+    platform: gcfv2
+    entryPoint: transferSurplusToReserveCallable
+    callableTrigger: {}

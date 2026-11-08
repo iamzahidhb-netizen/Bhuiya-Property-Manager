@@ -1,0 +1,65 @@
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-200/10 rounded-full blur-3xl pointer-events-none" />
+      </div>
+
+      {/* Official AB Logo Watermark in Background as requested */}
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0"
+        aria-hidden="true"
+      >
+        <div className="relative w-[340px] h-[340px] sm:w-[500px] sm:h-[500px] opacity-[0.09] filter drop-shadow-sm pointer-events-none transform -rotate-3 scale-105">
+          <img
+            src="/brand/anwar-bhuiyan-property.svg"
+            alt=""
+            className="w-full h-full object-contain pointer-events-none"
+          />
+        </div>
+      </div>
+
+      <div className="relative w-full max-w-md z-10">
+        {/* Apple-style Liquid Glass Card with real refraction */}
+        <LiquidGlass
+          className="p-8 sm:p-10 border border-white/60 shadow-2xl relative overflow-hidden"
+          scale={-120}
+          chroma={7}
+          blur={10}
+          saturate={1.4}
+        >
+          {/* Subtle Branded Corner Watermark inside Glass Card */}
+          <div
+            className="absolute -right-10 -bottom-10 w-44 h-44 opacity-[0.045] pointer-events-none overflow-hidden select-none"
+            aria-hidden="true"
+          >
+            <img
+              src="/brand/anwar-bhuiyan-property.svg"
+              alt=""
+              className="w-full h-full object-contain filter grayscale"
+            />
+          </div>
+
+          {/* Language Selector Header */}
+          <div className="flex justify-end mb-4 relative z-10">
+            <LanguageSelector compact />
+          </div>
+
+          {/* Header & Official Branding */}
+          <div className="text-center mb-7 relative z-10">
+            {/* Official AB Logo */}
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-white p-2 shadow-lg shadow-emerald-700/15 border border-emerald-100 flex items-center justify-center mb-4 overflow-hidden">
+              <img
+                src="/brand/anwar-bhuiyan-property.svg"
+                alt="Anwar Bhuiyan Property Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {isBengali ? 'আনোয়ার ভূঁইয়া প্রপার্টি' : 'Anwar Bhuiyan Property'}
+            </h1>
+            <p className="mt-1 text-sm font-semibold text-emerald-800">
+              {t('app.tagline')}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isBengali ? 'ভূঁইয়া পরিবার প্রপার্টি ও ডিজিটাল খাতা' : 'Property & Family Finance Management'}
+            </p>
+          </div>
+
+          {/* Error message */}

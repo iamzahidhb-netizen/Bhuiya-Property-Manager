@@ -1,0 +1,49 @@
+# Logs and debug files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Dependencies and build outputs
+node_modules/
+dist/
+dist-ssr/
+.cache/
+coverage/
+
+# Environment and sensitive variables
+.env
+.env.local
+.env.*
+!.env.example
+!.env.production.example
+
+# Firebase, Cloudflare, and Cloud local state/secrets
+.dev.vars
+.dev.vars.*
+.wrangler/
+.firebase/
+service-account*.json
+*.pem
+*.key
+*.cert
+
+# Editor and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local
+
+# Local Chrome browser profile data
+poc/phase-10-2a/chrome-profile-icons/

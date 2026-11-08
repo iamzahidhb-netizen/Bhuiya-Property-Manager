@@ -1,0 +1,12 @@
+export default function App() {
+  return (
+    <AuthProvider>
+      <LanguageProvider>
+        <WorkspaceProvider>
+          <OfflineStatusBanner />
+          <AppRouter />
+        </WorkspaceProvider>
+      </LanguageProvider>
+    </AuthProvider>
+  );
+}
