@@ -4,8 +4,10 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSettings } from '../../../contexts/SettingsContext';
 import type { NavItemConfig } from '../../../types/settings';
 
+export type MainNavSection = 'home' | 'accounts' | 'profile' | 'settings' | 'rent-deposit' | 'add-expense';
+
 export interface FloatingPillNavProps {
-  activeSection: 'home' | 'accounts' | 'profile' | 'settings';
+  activeSection: MainNavSection;
   drillDownView: string | null;
   onSelectSection: (section: 'home' | 'accounts' | 'profile') => void;
   onOpenNewExpense: () => void;

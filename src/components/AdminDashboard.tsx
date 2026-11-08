@@ -12,9 +12,9 @@ import type { RentBill, RentPayment, Expense } from '../types/finance';
 import { formatLocalizedCurrency, formatLocalizedMonth } from '../utils/banglaFormat';
 import { getDhakaDateInfo, getUserDisplayName } from '../utils/dhakaDate';
 
-// Simple Family Khata Modals & Types
-import SimpleRentPaymentModal from './khata/SimpleRentPaymentModal';
-import SimpleExpenseModal from './khata/SimpleExpenseModal';
+// Full-Page Financial Workflows & Modals
+import RentDepositPage from './finance/RentDepositPage';
+import AddExpensePage from './finance/AddExpensePage';
 import SimpleTenantDetailsModal from './khata/SimpleTenantDetailsModal';
 import { useSettings } from '../contexts/SettingsContext';
 import { SettingsCenter } from './settings/SettingsCenter';
@@ -73,14 +73,23 @@ function TabLoadingFallback() {
   );
 }
 
+export type ActiveDashboardSection =
+  | 'home'
+  | 'accounts'
+  | 'profile'
+  | 'settings'
+  | 'rent-deposit'
+  | 'add-expense';
+
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const { workspaceId, role, isMasterAdmin, canAccessTab } = useWorkspace();
   const { currentLanguage, t } = useLanguage();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Primary Sections: 'home' | 'accounts' | 'profile' | 'settings'
-  const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile' | 'settings'>('home');
+  // Primary Sections & Full-Page Workflows
+  const [activeSection, setActiveSection] = useState<ActiveDashboardSection>('home');
+  const [previousSection, setPreviousSection] = useState<'home' | 'accounts' | 'profile'>('home');
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -111,9 +120,7 @@ export default function AdminDashboard() {
   const isBn = currentLanguage === 'bn';
 
   // Modals state
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentPreselectedTenantId, setPaymentPreselectedTenantId] = useState<string | null>(null);
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [tenantDetailsModalOpen, setTenantDetailsModalOpen] = useState(false);
   const [selectedTenantForDetails, setSelectedTenantForDetails] = useState<Tenant | null>(null);
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
@@ -234,10 +241,25 @@ export default function AdminDashboard() {
     return { paid, due, isPaid, isPartial };
   }
 
-  // Open rent payment modal for specific tenant
+  // Navigation helpers for full-page financial workflows
+  function handleOpenRentDeposit(tenantId?: string | null) {
+    if (activeSection === 'home' || activeSection === 'accounts' || activeSection === 'profile') {
+      setPreviousSection(activeSection);
+    }
+    setPaymentPreselectedTenantId(tenantId || null);
+    setActiveSection('rent-deposit');
+  }
+
+  function handleOpenAddExpense() {
+    if (activeSection === 'home' || activeSection === 'accounts' || activeSection === 'profile') {
+      setPreviousSection(activeSection);
+    }
+    setActiveSection('add-expense');
+  }
+
+  // Open rent payment page for specific tenant
   function handleOpenPaymentForTenant(tenantId: string) {
-    setPaymentPreselectedTenantId(tenantId);
-    setPaymentModalOpen(true);
+    handleOpenRentDeposit(tenantId);
   }
 
   // Open tenant detail modal
@@ -249,6 +271,39 @@ export default function AdminDashboard() {
   const currentOwnerUid = user?.uid || '';
   const dhakaDate = getDhakaDateInfo(currentLanguage);
   const userName = getUserDisplayName(user?.displayName, user?.email);
+
+  // Dedicated Full-Page Rent Deposit View (Zero Popup, Zero Backdrop)
+  if (activeSection === 'rent-deposit') {
+    return (
+      <RentDepositPage
+        tenants={activeTenants}
+        bills={bills}
+        preSelectedTenantId={paymentPreselectedTenantId}
+        onBack={() => {
+          setPaymentPreselectedTenantId(null);
+          setActiveSection(previousSection);
+        }}
+        onSuccess={() => {
+          // Handled via real-time listeners
+        }}
+      />
+    );
+  }
+
+  // Dedicated Full-Page Add Expense View (Zero Popup, Zero Backdrop)
+  if (activeSection === 'add-expense') {
+    return (
+      <AddExpensePage
+        properties={activeProperties}
+        onBack={() => {
+          setActiveSection(previousSection);
+        }}
+        onSuccess={() => {
+          // Handled via real-time listeners
+        }}
+      />
+    );
+  }
 
   // Dedicated Full-Page Settings Center View (Zero Popup, Full Viewport)
   if (activeSection === 'settings') {
@@ -545,8 +600,8 @@ export default function AdminDashboard() {
                         key={qa.id}
                         type="button"
                         onClick={() => {
-                          if (qa.id === 'rentDeposit') setPaymentModalOpen(true);
-                          if (qa.id === 'newExpense') setExpenseModalOpen(true);
+                          if (qa.id === 'rentDeposit') handleOpenRentDeposit();
+                          if (qa.id === 'newExpense') handleOpenAddExpense();
                           if (qa.id === 'addTenant') setTenantModalOpen(true);
                           if (qa.id === 'allAccounts') setActiveSection('accounts');
                         }}
@@ -669,8 +724,7 @@ export default function AdminDashboard() {
                 </div>
                 <button
                   onClick={() => {
-                    setPaymentPreselectedTenantId(null);
-                    setPaymentModalOpen(true);
+                    handleOpenRentDeposit(null);
                   }}
                   disabled={!canAccessTab('rent')}
                   className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-semibold text-xs shadow-md shadow-emerald-700/20 border border-white/20 transition disabled:opacity-50 cursor-pointer"
@@ -711,7 +765,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setExpenseModalOpen(true)}
+                  onClick={() => handleOpenAddExpense()}
                   disabled={!canAccessTab('expenses')}
                   className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold text-xs shadow-md shadow-amber-600/20 border border-white/20 transition disabled:opacity-50 cursor-pointer"
                 >
@@ -1255,54 +1309,26 @@ export default function AdminDashboard() {
           setDrillDownView(null);
         }}
         onOpenNewExpense={() => {
-          if (expenseModalOpen) return;
           if (!canAccessTab('expenses')) {
             alert('আপনার খরচ যুক্ত করার অনুমতি নেই।');
             return;
           }
-          setExpenseModalOpen(true);
+          handleOpenAddExpense();
         }}
         onOpenRentPayment={() => {
-          if (paymentModalOpen) return;
           if (!canAccessTab('rent')) {
             alert('আপনার ভাড়া আদায় করার অনুমতি নেই।');
             return;
           }
-          setPaymentPreselectedTenantId(null);
-          setPaymentModalOpen(true);
+          handleOpenRentDeposit(null);
         }}
         canCreateExpense={canAccessTab('expenses')}
         canCollectRent={canAccessTab('rent')}
       />
 
       {/* ========================================================================= */}
-      {/* 4. MODALS CONTAINER                                                       */}
+      {/* 4. MODALS CONTAINER (Zero Popup for Rent & Expense)                      */}
       {/* ========================================================================= */}
-      {/* Simple Rent Payment Modal */}
-      <SimpleRentPaymentModal
-        isOpen={paymentModalOpen}
-        onClose={() => {
-          setPaymentModalOpen(false);
-          setPaymentPreselectedTenantId(null);
-        }}
-        tenants={activeTenants}
-        bills={bills}
-        preSelectedTenantId={paymentPreselectedTenantId}
-        onSuccess={() => {
-          // Handled via real-time listeners
-        }}
-      />
-
-      {/* Simple Expense Modal */}
-      <SimpleExpenseModal
-        isOpen={expenseModalOpen}
-        onClose={() => setExpenseModalOpen(false)}
-        properties={activeProperties}
-        onSuccess={() => {
-          // Handled via real-time listeners
-        }}
-      />
-
       {/* Simple Tenant Details Modal */}
       <SimpleTenantDetailsModal
         isOpen={tenantDetailsModalOpen}

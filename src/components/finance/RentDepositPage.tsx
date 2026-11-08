@@ -1,0 +1,575 @@
+import React, { useState } from 'react';
+import type { Tenant } from '../../types/tenant';
+import type { RentBill, PaymentMethod } from '../../types/finance';
+import { recordRentPayment } from '../../services/rentService';
+import { formatLocalizedCurrency } from '../../utils/banglaFormat';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import {
+  CreditCard,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  AlertTriangle,
+  RotateCcw,
+  User,
+  Phone,
+} from 'lucide-react';
+
+export interface RentDepositPageProps {
+  tenants: Tenant[];
+  bills: RentBill[];
+  preSelectedTenantId?: string | null;
+  onBack: () => void;
+  onSuccess?: () => void;
+  className?: string;
+}
+
+function makeTimestampId(prefix: string): string {
+  const ts = new Date().getTime();
+  return `${prefix}_${ts}`;
+}
+
+export const RentDepositPage: React.FC<RentDepositPageProps> = ({
+  tenants,
+  bills,
+  preSelectedTenantId,
+  onBack,
+  onSuccess,
+  className = '',
+}) => {
+  const { currentLanguage, t } = useLanguage();
+  const { settings } = useSettings();
+  const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
+  const isBn = currentLanguage === 'bn';
+
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
+  const [customAmount, setCustomAmount] = useState<number | '' | null>(null);
+  const [paymentDate, setPaymentDate] = useState<string>(() =>
+    new Date().toISOString().split('T')[0]
+  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [notes, setNotes] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState<boolean>(false);
+  const [successInfo, setSuccessInfo] = useState<{
+    receiptNumber: string;
+    amount: number;
+    tenantName: string;
+    paymentMethod: PaymentMethod;
+    paymentDate: string;
+  } | null>(null);
+
+  // Active tenant derived from selection or props
+  const effectiveTenantId =
+    selectedTenantId || preSelectedTenantId || (tenants.length > 0 ? tenants[0].id : '');
+  const currentTenant = tenants.find((item) => item.id === effectiveTenantId) || null;
+
+  // Active bill for the tenant
+  const currentBill = currentTenant
+    ? bills.find((b) => b.tenantId === currentTenant.id && b.status !== 'paid') ||
+      bills.find((b) => b.tenantId === currentTenant.id) ||
+      null
+    : null;
+
+  // Amount defaults to bill balance or monthly rent
+  const defaultAmount = currentBill
+    ? currentBill.balanceDue > 0
+      ? currentBill.balanceDue
+      : currentBill.totalDue
+    : currentTenant?.monthlyRent || 0;
+
+  const displayAmount = customAmount !== null ? customAmount : defaultAmount;
+
+  // Unsaved changes detection
+  const isDirty =
+    !successInfo &&
+    (customAmount !== null ||
+      notes.trim().length > 0 ||
+      (selectedTenantId !== '' &&
+        selectedTenantId !== (preSelectedTenantId || (tenants[0]?.id ?? ''))));
+
+  const handleBackRequest = () => {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      onBack();
+    }
+  };
+
+  const handleResetForm = () => {
+    setSelectedTenantId('');
+    setCustomAmount(null);
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentMethod('cash');
+    setNotes('');
+    setError(null);
+    setSuccessInfo(null);
+    setShowDiscardConfirm(false);
+  };
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const numAmount = Number(displayAmount);
+    if (!numAmount || numAmount <= 0) {
+      setError(
+        isBn
+          ? 'সঠিক টাকার পরিমাণ লিখুন (০ অপেক্ষা বেশি হতে হবে)।'
+          : 'Please enter a valid amount greater than 0.'
+      );
+      return;
+    }
+
+    if (!effectiveTenantId) {
+      setError(
+        isBn
+          ? 'অনুগ্রহ করে একজন ভাড়াটিয়া নির্বাচন করুন।'
+          : 'Please select a tenant.'
+      );
+      return;
+    }
+
+    const targetBillId = currentBill?.id || makeTimestampId(`bill_auto_${effectiveTenantId}`);
+
+    setLoading(true);
+    try {
+      const res = await recordRentPayment({
+        billId: targetBillId,
+        amount: numAmount,
+        paymentMethod,
+        paymentDate,
+        notes: notes.trim() || undefined,
+      });
+
+      setSuccessInfo({
+        receiptNumber: res.receiptNumber || `RCP-${makeTimestampId('').slice(-6)}`,
+        amount: numAmount,
+        tenantName: currentTenant?.name || (isBn ? 'ভাড়াটিয়া' : 'Tenant'),
+        paymentMethod,
+        paymentDate,
+      });
+      if (onSuccess) onSuccess();
+    } catch (err: unknown) {
+      console.error('[RentDepositPage] Submit error:', err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : isBn
+          ? 'ভাড়া জমা করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।'
+          : 'Failed to record rent payment.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const getMethodLabel = (method: PaymentMethod) => {
+    switch (method) {
+      case 'cash':
+        return isBn ? 'নগদ (Cash)' : 'Cash';
+      case 'bkash':
+        return isBn ? 'বিকাশ (bKash)' : 'bKash';
+      case 'nagad':
+        return isBn ? 'নগদ (Nagad)' : 'Nagad';
+      case 'bank':
+        return isBn ? 'ব্যাংক (Bank Transfer)' : 'Bank Transfer';
+      case 'other':
+      default:
+        return isBn ? 'অন্যান্য (Other)' : 'Other';
+    }
+  };
+
+  return (
+    <div
+      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-28 sm:pb-32 ${className}`}
+      data-testid="rent-deposit-fullpage"
+    >
+      {/* ===================================================================== */}
+      {/* Top Header: HyperOS Glass Bar with Back Navigation                    */}
+      {/* ===================================================================== */}
+      <header className="sticky top-0 z-30 hyper-glass-nav border-b border-[var(--hyper-border-subtle)] px-4 py-3 sm:px-6">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackRequest}
+              aria-label={t('common.back') || 'Back'}
+              className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg shrink-0">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
+                {isBn ? 'ভাড়া জমা (Payment Receipt)' : 'Rent Deposit (Payment Receipt)'}
+              </h1>
+              <p className="text-[11px] text-[var(--hyper-text-secondary)]">
+                {isBn ? 'সহজ পারিবারিক ভাড়া আদায় খাতা' : 'Simple Family Rent Collection Register'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBackRequest}
+            className="hidden sm:inline-flex px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+          >
+            {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+          </button>
+        </div>
+      </header>
+
+      {/* ===================================================================== */}
+      {/* Main Content Area: Responsive Form Container (Centered Max-W-2XL)    */}
+      {/* ===================================================================== */}
+      <main className="max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex-1">
+        {successInfo ? (
+          /* ================================================================= */
+          /* Full-Page Success & Receipt Card View                             */
+          /* ================================================================= */
+          <div className="bg-[var(--hyper-surface)] rounded-3xl p-6 sm:p-8 border border-[var(--hyper-border-subtle)] shadow-xs text-center space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-[var(--hyper-text-primary)]">
+                {isBn ? 'ভাড়া সফলভাবে জমা হয়েছে!' : 'Rent Payment Recorded!'}
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--hyper-text-secondary)] mt-1">
+                {isBn
+                  ? 'পারিবারিক ভাড়া খাতায় রসিদ সংরক্ষিত হয়েছে'
+                  : 'Receipt saved to family rent ledger'}
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-left space-y-3">
+              <div className="flex justify-between items-center text-sm border-b border-emerald-500/15 pb-2.5">
+                <span className="text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'ভাড়াটিয়ার নাম' : 'Tenant Name'}
+                </span>
+                <span className="font-bold text-[var(--hyper-text-primary)]">
+                  {successInfo.tenantName}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm border-b border-emerald-500/15 pb-2.5">
+                <span className="text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'জমা টাকার পরিমাণ' : 'Paid Amount'}
+                </span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
+                  {formatLocalizedCurrency(successInfo.amount, currentLanguage, useBanglaNumerals)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm border-b border-emerald-500/15 pb-2.5">
+                <span className="text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'পরিশোধের মাধ্যম' : 'Payment Method'}
+                </span>
+                <span className="font-semibold text-[var(--hyper-text-primary)]">
+                  {getMethodLabel(successInfo.paymentMethod)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm border-b border-emerald-500/15 pb-2.5">
+                <span className="text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'পরিশোধের তারিখ' : 'Payment Date'}
+                </span>
+                <span className="font-medium text-[var(--hyper-text-primary)]">
+                  {successInfo.paymentDate}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm pt-0.5">
+                <span className="text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'মানি রসিদ নম্বর' : 'Receipt Number'}
+                </span>
+                <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-600/15 text-emerald-700 dark:text-emerald-300">
+                  {successInfo.receiptNumber}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleResetForm}
+                className="w-full sm:w-1/2 py-3 rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] hover:bg-black/5 dark:hover:bg-white/5 text-[var(--hyper-text-primary)] font-semibold text-sm transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{isBn ? 'অন্য ভাড়া জমা দিন' : 'Record Another'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onBack}
+                className="w-full sm:w-1/2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/25 transition cursor-pointer"
+              >
+                {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ================================================================= */
+          /* Main Form Card                                                    */
+          /* ================================================================= */
+          <div className="bg-[var(--hyper-surface)] rounded-3xl p-5 sm:p-7 border border-[var(--hyper-border-subtle)] shadow-xs space-y-6">
+            {error && (
+              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-300 text-xs sm:text-sm flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="flex-1 font-medium">{error}</div>
+              </div>
+            )}
+
+            <form id="rent-deposit-form" onSubmit={handleSubmit} className="space-y-5">
+              {/* Field 1: Tenant Selection */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="rent-tenant-select"
+                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                >
+                  {isBn ? '১. ভাড়াটিয়া নির্বাচন করুন *' : '1. Select Tenant *'}
+                </label>
+                <div className="relative">
+                  <select
+                    id="rent-tenant-select"
+                    value={effectiveTenantId}
+                    onChange={(e) => {
+                      setSelectedTenantId(e.target.value);
+                      setCustomAmount(null);
+                    }}
+                    disabled={loading}
+                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition cursor-pointer"
+                  >
+                    {tenants.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({isBn ? 'মাসিক ভাড়া' : 'Rent'}:{' '}
+                        {formatLocalizedCurrency(item.monthlyRent, currentLanguage, useBanglaNumerals)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tenant Details Preview Banner */}
+              {currentTenant && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-[var(--hyper-text-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-[var(--hyper-text-primary)]">
+                        {currentTenant.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--hyper-text-secondary)] flex items-center gap-1 mt-0.5">
+                        <Phone className="w-3 h-3" />
+                        <span>{currentTenant.mobile || (isBn ? 'মোবাইল দেয়া নেই' : 'No mobile')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sm:text-right pt-2 sm:pt-0 border-t sm:border-t-0 border-emerald-500/20">
+                    <div className="text-[11px] text-[var(--hyper-text-secondary)]">
+                      {isBn ? 'মাসিক ভাড়া' : 'Monthly Rent'}
+                    </div>
+                    <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                      {formatLocalizedCurrency(currentTenant.monthlyRent, currentLanguage, useBanglaNumerals)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Field 2: Payment Amount */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="rent-amount-input"
+                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                >
+                  {isBn ? '২. জমা টাকার পরিমাণ (৳) *' : '2. Payment Amount (৳) *'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--hyper-text-tertiary)] font-bold text-base select-none">
+                    ৳
+                  </span>
+                  <input
+                    id="rent-amount-input"
+                    type="number"
+                    min="1"
+                    value={displayAmount}
+                    onChange={(e) =>
+                      setCustomAmount(e.target.value ? Number(e.target.value) : '')
+                    }
+                    disabled={loading}
+                    placeholder="20000"
+                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-9 pr-4 py-3 text-base font-bold text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                  />
+                </div>
+                {currentBill && currentBill.balanceDue > 0 && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                    {isBn ? 'বকেয়া বিল অনুযায়ী স্বয়ংক্রিয়ভাবে ধার্য:' : 'Defaulted to current due:'}{' '}
+                    <span className="font-bold">
+                      {formatLocalizedCurrency(currentBill.balanceDue, currentLanguage, useBanglaNumerals)}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Field 3 & 4: Date and Method in 2-Column Responsive Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="rent-date-input"
+                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                  >
+                    {isBn ? '৩. পরিশোধের তারিখ *' : '3. Payment Date *'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="rent-date-input"
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      disabled={loading}
+                      className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="rent-method-select"
+                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                  >
+                    {isBn ? '৪. পরিশোধের মাধ্যম *' : '4. Payment Method *'}
+                  </label>
+                  <select
+                    id="rent-method-select"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                    disabled={loading}
+                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition cursor-pointer"
+                  >
+                    <option value="cash">{isBn ? 'নগদ (Cash)' : 'Cash'}</option>
+                    <option value="bkash">{isBn ? 'বিকাশ (bKash)' : 'bKash'}</option>
+                    <option value="nagad">{isBn ? 'নগদ (Nagad)' : 'Nagad'}</option>
+                    <option value="bank">{isBn ? 'ব্যাংক (Bank Transfer)' : 'Bank Transfer'}</option>
+                    <option value="other">{isBn ? 'অন্যান্য (Other)' : 'Other'}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Field 5: Notes / Reference */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="rent-notes-input"
+                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                >
+                  {isBn
+                    ? '৫. নোট বা রসিদ রেফারেন্স (ঐচ্ছিক)'
+                    : '5. Notes or Receipt Reference (Optional)'}
+                </label>
+                <div className="relative">
+                  <input
+                    id="rent-notes-input"
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    disabled={loading}
+                    placeholder={
+                      isBn
+                        ? 'যেমন: চেকের নম্বর, ব্যাংক স্লিপ বা ক্যাশ মেমো'
+                        : 'e.g. Check number or bank slip memo'
+                    }
+                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                  />
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+      </main>
+
+      {/* ===================================================================== */}
+      {/* Sticky Bottom Action Footer (Mobile & Desktop)                        */}
+      {/* ===================================================================== */}
+      {!successInfo && (
+        <footer className="fixed bottom-0 inset-x-0 z-40 hyper-glass-nav border-t border-[var(--hyper-border-subtle)] px-4 py-3 sm:py-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackRequest}
+              disabled={loading}
+              className="w-1/3 py-3 rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-xs sm:text-sm transition cursor-pointer select-none"
+            >
+              {isBn ? 'বাতিল' : 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              form="rent-deposit-form"
+              disabled={loading}
+              className="w-2/3 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs sm:text-sm shadow-md shadow-emerald-600/25 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+              <span>
+                {loading
+                  ? isBn
+                    ? 'জমা হচ্ছে...'
+                    : 'Processing...'
+                  : isBn
+                  ? 'ভাড়া জমা নিশ্চিত করুন'
+                  : 'Confirm Rent Deposit'}
+              </span>
+            </button>
+          </div>
+        </footer>
+      )}
+
+      {/* ===================================================================== */}
+      {/* Unsaved Changes Confirmation Dialog (Destructive Nav Guard Only)      */}
+      {/* ===================================================================== */}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-3xl bg-[var(--hyper-surface)] p-6 border border-[var(--hyper-border-subtle)] shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-bold text-base text-[var(--hyper-text-primary)]">
+                {isBn ? 'অসংরক্ষিত পরিবর্তন রয়েছে' : 'Unsaved Changes'}
+              </h3>
+            </div>
+            <p className="text-xs text-[var(--hyper-text-secondary)] leading-relaxed">
+              {isBn
+                ? 'আপনি তথ্য পূরণ করা শুরু করেছেন। ফিরে গেলে আপনার ইনপুট মুছে যাবে। আপনি কি নিশ্চিত?'
+                : 'You have entered changes that will not be saved if you leave. Are you sure you want to discard them?'}
+            </p>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                className="flex-1 py-2.5 rounded-2xl border border-[var(--hyper-border-subtle)] bg-black/5 dark:bg-white/5 text-[var(--hyper-text-primary)] font-semibold text-xs hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+              >
+                {isBn ? 'এখানে থাকুন' : 'Stay'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onBack();
+                }}
+                className="flex-1 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition cursor-pointer"
+              >
+                {isBn ? 'বাতিল ও প্রস্থান' : 'Discard & Exit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default RentDepositPage;
