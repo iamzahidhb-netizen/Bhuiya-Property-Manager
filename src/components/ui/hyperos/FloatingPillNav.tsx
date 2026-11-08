@@ -5,7 +5,7 @@ import { useSettings } from '../../../contexts/SettingsContext';
 import type { NavItemConfig } from '../../../types/settings';
 
 export interface FloatingPillNavProps {
-  activeSection: 'home' | 'accounts' | 'profile';
+  activeSection: 'home' | 'accounts' | 'profile' | 'settings';
   drillDownView: string | null;
   onSelectSection: (section: 'home' | 'accounts' | 'profile') => void;
   onOpenNewExpense: () => void;

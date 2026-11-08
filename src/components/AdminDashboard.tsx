@@ -39,6 +39,11 @@ import {
   Users,
   Scale,
   Hourglass,
+  SlidersHorizontal,
+  KeyRound,
+  LogOut,
+  DoorClosed,
+  UserPlus,
 } from 'lucide-react';
 
 // Modals for Property, Unit, Tenant creation
@@ -69,12 +74,23 @@ function TabLoadingFallback() {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { workspaceId, role, isMasterAdmin, canAccessTab } = useWorkspace();
   const { currentLanguage, t } = useLanguage();
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  // 3 Primary Sections: 'home' | 'accounts' | 'profile'
-  const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile'>('home');
+  // Primary Sections: 'home' | 'accounts' | 'profile' | 'settings'
+  const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile' | 'settings'>('home');
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+      setLoggingOut(false);
+    }
+  }
 
   // Sub-detail drill-downs (when user wants full tables / management views)
   const [drillDownView, setDrillDownView] = useState<
@@ -233,6 +249,28 @@ export default function AdminDashboard() {
   const currentOwnerUid = user?.uid || '';
   const dhakaDate = getDhakaDateInfo(currentLanguage);
   const userName = getUserDisplayName(user?.displayName, user?.email);
+
+  // Dedicated Full-Page Settings Center View (Zero Popup, Full Viewport)
+  if (activeSection === 'settings') {
+    return (
+      <div className="min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200">
+        <SettingsCenter
+          onBack={() => setActiveSection('profile')}
+          onOpenMemberManagement={() => {
+            setActiveSection('profile');
+            setMemberManagementModalOpen(true);
+          }}
+        />
+        {isMasterAdmin && (
+          <MemberManagementModal
+            isOpen={memberManagementModalOpen}
+            onClose={() => setMemberManagementModalOpen(false)}
+            currentAdminUid={user?.uid || ''}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen hyper-ambient-bg flex flex-col text-[var(--hyper-text-primary)] antialiased relative overflow-x-hidden">
@@ -1039,12 +1077,168 @@ export default function AdminDashboard() {
         )}
 
         {/* --------------------------------------------------------------------- */}
-        {/* SECTION 3: সেন্ট্রালাইজড অ্যাডমিন সেটিংস সেন্টার (SETTINGS CENTER)     */}
+        {/* SECTION 3: অ্যাডমিন প্রোফাইল ও সেটিংস নেভিগেশন (PROFILE & SETTINGS)   */}
         {/* --------------------------------------------------------------------- */}
         {!drillDownView && activeSection === 'profile' && (
-          <SettingsCenter
-            onOpenMemberManagement={() => setMemberManagementModalOpen(true)}
-          />
+          <div className="space-y-4 max-w-2xl mx-auto pb-24">
+            {/* 1. User Profile & Identity Card */}
+            <HyperCard variant="default" className="p-5 sm:p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-700/20 shrink-0">
+                  <UserRound className="w-7 h-7 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg sm:text-xl font-bold text-[var(--hyper-text-primary)] leading-tight truncate">
+                      {userName}
+                    </h2>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                        isMasterAdmin
+                          ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/20'
+                          : role === 'manager'
+                          ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
+                          : 'bg-black/5 dark:bg-white/10 text-[var(--hyper-text-secondary)] border-transparent'
+                      }`}
+                    >
+                      {isMasterAdmin
+                        ? t('common.roles.master_admin')
+                        : role === 'manager'
+                        ? t('common.roles.manager')
+                        : t('common.roles.viewer')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--hyper-text-secondary)] mt-0.5 truncate">
+                    {user?.email || 'admin@bhuiyan.com'}
+                  </p>
+                  <div className="flex items-center gap-2 text-[10px] text-[var(--hyper-text-tertiary)] mt-1.5">
+                    <Clock className="w-3 h-3" />
+                    <span>{dhakaDate.fullDate} ({dhakaDate.weekday})</span>
+                  </div>
+                </div>
+              </div>
+            </HyperCard>
+
+            {/* 2. Master Admin Member Management Card */}
+            {isMasterAdmin && (
+              <HyperCard variant="default" className="p-5 sm:p-6 space-y-3 border-purple-500/20">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--hyper-border-subtle)]">
+                  <div className="flex items-center gap-2.5">
+                    <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <h3 className="font-bold text-[var(--hyper-text-primary)] text-base">
+                      {t('profile.memberManagementTitle')}
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300">
+                    {t('profile.masterAdminOnlyBadge')}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--hyper-text-secondary)]">
+                  {t('profile.memberManagementDesc')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMemberManagementModalOpen(true)}
+                  className="w-full p-3.5 rounded-2xl bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/20 text-purple-800 dark:text-purple-200 font-bold text-xs transition flex items-center justify-between cursor-pointer select-none group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <KeyRound className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-bold">{t('profile.memberManagementBtnTitle')}</div>
+                      <div className="text-[10px] text-purple-700/80 dark:text-purple-300/80 font-normal">
+                        {t('profile.memberManagementBtnSubtitle')}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </HyperCard>
+            )}
+
+            {/* 3. Centralized Settings Center Entry Point (Full-Page Navigation) */}
+            <HyperCard
+              variant="default"
+              onClick={() => setActiveSection('settings')}
+              className="p-5 sm:p-6 cursor-pointer border border-[#22B84A]/30 bg-[#22B84A]/[0.04] hover:bg-[#22B84A]/[0.08] transition-all select-none group"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div className="w-12 h-12 rounded-[16px] bg-[var(--hyper-green-bg)] text-[#22B84A] flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                    <SlidersHorizontal className="w-6 h-6 text-[#22B84A]" strokeWidth={2.2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-sm sm:text-base text-[var(--hyper-text-primary)] leading-tight">
+                        {isBn ? 'অ্যাপ সেটিংস ও কাস্টমাইজেশন' : 'App Settings & Customization'}
+                      </h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#22B84A]/15 text-[#22B84A]">
+                        {isBn ? 'ফুল পেজ' : 'Full Page'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--hyper-text-secondary)] mt-1">
+                      {isBn
+                        ? 'সিস্টেম থিম, ড্যাশবোর্ড কার্ড, ভাষা, নেভিগেশন ও পারমিশন কন্ট্রোল'
+                        : 'Theme, dashboard cards, language, navigation and permissions'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-[#22B84A] font-bold text-xs shrink-0">
+                  <span className="hidden sm:inline">{isBn ? 'খুলুন' : 'Open'}</span>
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </HyperCard>
+
+            {/* 4. Quick Property & Unit Creation Shortcuts (for Admin) */}
+            {isMasterAdmin && (
+              <HyperCard variant="default" className="p-4 sm:p-5 space-y-3">
+                <span className="text-xs font-bold text-[var(--hyper-text-secondary)] uppercase tracking-wider block px-1">
+                  {isBn ? 'দ্রুত রেকর্ড তৈরি' : 'Quick Creation'}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setPropertyModalOpen(true)}
+                    className="p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-[var(--hyper-text-primary)] font-semibold text-xs transition flex items-center justify-between cursor-pointer"
+                  >
+                    <span>{t('profile.addPropertyBtn')}</span>
+                    <Building2 className="w-4 h-4 text-[var(--hyper-text-secondary)]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnitModalOpen(true)}
+                    className="p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-[var(--hyper-text-primary)] font-semibold text-xs transition flex items-center justify-between cursor-pointer"
+                  >
+                    <span>{t('profile.addUnitBtn')}</span>
+                    <DoorClosed className="w-4 h-4 text-[var(--hyper-text-secondary)]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTenantModalOpen(true)}
+                    className="p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-[var(--hyper-text-primary)] font-semibold text-xs transition flex items-center justify-between cursor-pointer"
+                  >
+                    <span>{t('profile.registerTenantBtn')}</span>
+                    <UserPlus className="w-4 h-4 text-[var(--hyper-text-secondary)]" />
+                  </button>
+                </div>
+              </HyperCard>
+            )}
+
+            {/* 5. Sign Out Action */}
+            <HyperCard variant="default" className="p-4 border-red-500/20">
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-full py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/15 text-red-600 dark:text-red-400 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer select-none"
+              >
+                <LogOut className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <span>{loggingOut ? t('profile.signingOut') : t('profile.signOutBtn')}</span>
+              </button>
+            </HyperCard>
+          </div>
         )}
       </main>
 

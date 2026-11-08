@@ -94,22 +94,30 @@ export const HyperOSComponentShowcase: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. MAIN HOME VIEW CONTAINER */}
-      <main className="max-w-md mx-auto px-4 pt-4 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full space-y-4">
-        {/* Test Control Pill Bar */}
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[11px] font-semibold text-[var(--hyper-text-secondary)] uppercase tracking-wider">
-            {activeSection === 'profile' ? 'Phase 3.2: অ্যাডমিন সেটিংস সেন্টার' : 'Phase 3.1: হোম ড্যাশবোর্ড'}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setActiveSection(activeSection === 'profile' ? 'home' : 'profile')}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#22B84A]/10 text-[#22B84A] hover:bg-[#22B84A]/20 cursor-pointer"
-            >
-              {activeSection === 'profile' ? 'হোমে ফিরে যান' : 'সেটিংস সেন্টার খুলুন'}
-            </button>
-            {activeSection === 'home' && (
+      {/* 2. MAIN CONTENT AREA */}
+      {activeSection === 'profile' ? (
+        <div className="flex-1 w-full">
+          <SettingsCenter
+            key={settingsCategory || 'root'}
+            initialCategory={settingsCategory}
+            onBack={() => setActiveSection('home')}
+          />
+        </div>
+      ) : (
+        <main className="max-w-md mx-auto px-4 pt-4 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full space-y-4">
+          {/* Test Control Pill Bar */}
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] font-semibold text-[var(--hyper-text-secondary)] uppercase tracking-wider">
+              Phase 3.1: হোম ড্যাশবোর্ড
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveSection('profile')}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#22B84A]/10 text-[#22B84A] hover:bg-[#22B84A]/20 cursor-pointer"
+              >
+                সেটিংস সেন্টার খুলুন
+              </button>
               <button
                 type="button"
                 onClick={() => setTestOverflow(!testOverflow)}
@@ -117,16 +125,8 @@ export const HyperOSComponentShowcase: React.FC = () => {
               >
                 {testOverflow ? '৳০' : '৳১২,৩৪,৫৬৭'}
               </button>
-            )}
+            </div>
           </div>
-        </div>
-
-        {activeSection === 'profile' && (
-          <SettingsCenter
-            key={settingsCategory || 'root'}
-            initialCategory={settingsCategory}
-          />
-        )}
 
         {activeSection === 'home' && (
           <>
@@ -217,9 +217,10 @@ export const HyperOSComponentShowcase: React.FC = () => {
             </div>
           </HyperCard>
         )}
-          </>
-        )}
-      </main>
+            </>
+          )}
+        </main>
+      )}
 
       {/* 3. FIXED BOTTOM FIVE-OPTION FLOATING PILL NAVIGATION DOCK */}
       <FloatingPillNav
