@@ -1,0 +1,181 @@
+/**
+ * Xiaomi HyperOS Inspired Frosted Glass Design System Tokens
+ * Anwar Bhuiyan Property — Liquid & Frosted Glass Architecture
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Surface & Canvas (Light) */
+  --hyper-bg-canvas: #F2F3F5;
+  --hyper-bg-card: rgba(255, 255, 255, 0.86);
+  --hyper-bg-card-subtle: rgba(255, 255, 255, 0.65);
+  --hyper-bg-card-hover: rgba(255, 255, 255, 0.95);
+  --hyper-bg-glass: rgba(255, 255, 255, 0.72);
+  --hyper-bg-glass-strong: rgba(255, 255, 255, 0.86);
+  --hyper-bg-glass-nav: rgba(255, 255, 255, 0.82);
+  --hyper-bg-modal: #FFFFFF;
+  --hyper-bg-modal-footer: rgba(248, 250, 252, 0.90);
+  --hyper-bg-input: rgba(255, 255, 255, 0.85);
+
+  /* Typography (Light) */
+  --hyper-text-primary: #202124;
+  --hyper-text-secondary: #70757a;
+  --hyper-text-tertiary: #9aa0a6;
+
+  /* Borders & Highlights (Light) */
+  --hyper-border: rgba(255, 255, 255, 0.65);
+  --hyper-border-subtle: rgba(0, 0, 0, 0.07);
+  --hyper-border-glass: rgba(255, 255, 255, 0.55);
+  --hyper-inner-highlight: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9);
+
+  /* Ambient Shadows (Light) */
+  --hyper-shadow-card: 0 4px 18px -2px rgba(0, 0, 0, 0.04), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+  --hyper-shadow-nav: 0 14px 34px -8px rgba(0, 0, 0, 0.12), 0 6px 14px -4px rgba(0, 0, 0, 0.05);
+  --hyper-shadow-modal: 0 24px 50px -12px rgba(0, 0, 0, 0.18), 0 10px 20px -6px rgba(0, 0, 0, 0.08);
+
+  /* Accent Colors (Consistent across themes) */
+  --hyper-green: #22B84A;
+  --hyper-blue: #1685E8;
+  --hyper-orange: #F28A24;
+  --hyper-purple: #7655E8;
+  --hyper-red: #E94B4B;
+
+  /* Accent Tint Backgrounds (Light) */
+  --hyper-green-bg: rgba(34, 184, 74, 0.12);
+  --hyper-blue-bg: rgba(22, 133, 232, 0.12);
+  --hyper-orange-bg: rgba(242, 138, 36, 0.12);
+  --hyper-purple-bg: rgba(118, 85, 232, 0.12);
+  --hyper-red-bg: rgba(233, 75, 75, 0.12);
+
+  /* Radii */
+  --hyper-radius-card: 28px;
+  --hyper-radius-modal: 32px;
+  --hyper-radius-squircle: 18px;
+  --hyper-radius-pill: 9999px;
+}
+
+.dark {
+  /* Surface & Canvas (Dark) */
+  --hyper-bg-canvas: #000000;
+  --hyper-bg-card: rgba(32, 32, 35, 0.88);
+  --hyper-bg-card-subtle: rgba(42, 42, 45, 0.70);
+  --hyper-bg-card-hover: rgba(48, 48, 52, 0.95);
+  --hyper-bg-glass: rgba(35, 35, 38, 0.78);
+  --hyper-bg-glass-strong: rgba(45, 45, 48, 0.92);
+  --hyper-bg-glass-nav: rgba(28, 28, 30, 0.86);
+  --hyper-bg-modal: #18181A;
+  --hyper-bg-modal-footer: rgba(24, 24, 26, 0.95);
+  --hyper-bg-input: rgba(40, 40, 44, 0.85);
+
+  /* Typography (Dark) */
+  --hyper-text-primary: #F5F5F5;
+  --hyper-text-secondary: #A0A0A0;
+  --hyper-text-tertiary: #666666;
+
+  /* Borders & Highlights (Dark) */
+  --hyper-border: rgba(255, 255, 255, 0.10);
+  --hyper-border-subtle: rgba(255, 255, 255, 0.08);
+  --hyper-border-glass: rgba(255, 255, 255, 0.09);
+  --hyper-inner-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+
+  /* Ambient Shadows (Dark) */
+  --hyper-shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.6), 0 2px 6px -1px rgba(0, 0, 0, 0.4);
+  --hyper-shadow-nav: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 8px 18px -4px rgba(0, 0, 0, 0.6);
+  --hyper-shadow-modal: 0 28px 60px -12px rgba(0, 0, 0, 0.9), 0 12px 24px -6px rgba(0, 0, 0, 0.7);
+
+  /* Accent Tint Backgrounds (Dark) */
+  --hyper-green-bg: rgba(34, 184, 74, 0.22);
+  --hyper-blue-bg: rgba(22, 133, 232, 0.22);
+  --hyper-orange-bg: rgba(242, 138, 36, 0.22);
+  --hyper-purple-bg: rgba(118, 85, 232, 0.22);
+  --hyper-red-bg: rgba(233, 75, 75, 0.22);
+}
+
+/* HyperOS Base Layout Styles */
+body {
+  background-color: var(--hyper-bg-canvas);
+  color: var(--hyper-text-primary);
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Base Ambient Glow for HyperOS */
+.hyper-ambient-bg {
+  position: relative;
+  background-color: var(--hyper-bg-canvas);
+  background-image: 
+    radial-gradient(at 15% 10%, rgba(34, 184, 74, 0.07) 0px, transparent 50%),
+    radial-gradient(at 85% 15%, rgba(22, 133, 232, 0.06) 0px, transparent 50%),
+    radial-gradient(at 50% 60%, rgba(34, 184, 74, 0.04) 0px, transparent 65%);
+  background-attachment: fixed;
+  transition: background-color 0.25s ease;
+}
+
+.dark .hyper-ambient-bg {
+  background-image: 
+    radial-gradient(at 15% 10%, rgba(34, 184, 74, 0.09) 0px, transparent 50%),
+    radial-gradient(at 85% 15%, rgba(22, 133, 232, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 60%, rgba(118, 85, 232, 0.05) 0px, transparent 65%);
+}
+
+/* Shared Frosted Glass Rules (Floating Nav, Modal Scrim, FAB) */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .hyper-glass-nav {
+    background: var(--hyper-bg-glass-nav);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  }
+  .hyper-modal-scrim {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .dark .hyper-modal-scrim {
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .hyper-glass-nav {
+    background: var(--hyper-bg-glass-strong);
+  }
+  .hyper-modal-scrim {
+    background: rgba(0, 0, 0, 0.75);
+  }
+}
+
+/* Universal Token Support Classes for All Modals & Views */
+.hyper-modal-sheet {
+  background-color: var(--hyper-bg-modal);
+  border-color: var(--hyper-border);
+  color: var(--hyper-text-primary);
+  box-shadow: var(--hyper-shadow-modal);
+}
+
+.hyper-modal-header {
+  border-bottom: 1px solid var(--hyper-border-subtle);
+  background-color: var(--hyper-bg-modal);
+}
+
+.hyper-modal-footer {
+  border-top: 1px solid var(--hyper-border-subtle);
+  background-color: var(--hyper-bg-modal-footer);
+}
+
+.hyper-input-field {
+  background-color: var(--hyper-bg-input);
+  border: 1px solid var(--hyper-border-subtle);
+  color: var(--hyper-text-primary);
+  border-radius: var(--hyper-radius-squircle);
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hyper-input-field:focus {
+  outline: none;
+  border-color: var(--hyper-green);
+  box-shadow: 0 0 0 3px rgba(34, 184, 74, 0.25);
+}
