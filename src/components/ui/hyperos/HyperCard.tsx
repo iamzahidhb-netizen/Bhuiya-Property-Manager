@@ -22,6 +22,7 @@ export const HyperCard: React.FC<HyperCardProps> = ({
   onClick,
   ...rest
 }) => {
+  const isClickable = clickable || Boolean(onClick);
   const baseClasses = 'relative rounded-[28px] transition-all duration-200 overflow-hidden';
 
   const surfaceClasses = {
@@ -39,14 +40,14 @@ export const HyperCard: React.FC<HyperCardProps> = ({
     ? 'backdrop-blur-xl -webkit-backdrop-blur-xl'
     : '';
 
-  const interactiveClasses = clickable
+  const interactiveClasses = isClickable
     ? 'cursor-pointer hover:bg-[var(--hyper-bg-card-hover)] active:scale-[0.985] select-none'
     : '';
 
   return (
     <div
       className={`${baseClasses} ${surfaceClasses} ${glassClasses} ${interactiveClasses} ${className}`}
-      onClick={clickable ? onClick : undefined}
+      onClick={onClick}
       {...rest}
     >
       {children}

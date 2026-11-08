@@ -1160,6 +1160,8 @@ export default function AdminDashboard() {
             {/* 3. Centralized Settings Center Entry Point (Full-Page Navigation) */}
             <HyperCard
               variant="default"
+              clickable
+              data-settings-trigger="true"
               onClick={() => setActiveSection('settings')}
               className="p-5 sm:p-6 cursor-pointer border border-[#22B84A]/30 bg-[#22B84A]/[0.04] hover:bg-[#22B84A]/[0.08] transition-all select-none group"
             >
