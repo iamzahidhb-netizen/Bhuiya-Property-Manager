@@ -15,6 +15,8 @@ import {
   FloatingPillNav,
   ModalWrapper,
 } from './index';
+import { SettingsCenter } from '../../settings/SettingsCenter';
+import type { SettingsCategoryId } from '../../settings/SettingsHome';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 export const HyperOSComponentShowcase: React.FC = () => {
@@ -22,6 +24,14 @@ export const HyperOSComponentShowcase: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile'>('home');
   const [testOverflow, setTestOverflow] = useState(false);
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategoryId | null>(null);
+
+  React.useEffect(() => {
+    (window as unknown as { __setSettingsCategory?: (cat: SettingsCategoryId | null) => void }).__setSettingsCategory = (cat) => {
+      setActiveSection('profile');
+      setSettingsCategory(cat);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen hyper-ambient-bg flex flex-col text-[var(--hyper-text-primary)] antialiased relative overflow-x-hidden transition-colors duration-250">
@@ -89,19 +99,39 @@ export const HyperOSComponentShowcase: React.FC = () => {
         {/* Test Control Pill Bar */}
         <div className="flex items-center justify-between px-1">
           <span className="text-[11px] font-semibold text-[var(--hyper-text-secondary)] uppercase tracking-wider">
-            Phase 3.1: হোম ড্যাশবোর্ড
+            {activeSection === 'profile' ? 'Phase 3.2: অ্যাডমিন সেটিংস সেন্টার' : 'Phase 3.1: হোম ড্যাশবোর্ড'}
           </span>
-          <button
-            type="button"
-            onClick={() => setTestOverflow(!testOverflow)}
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 text-[var(--hyper-text-primary)] hover:bg-black/10 cursor-pointer"
-          >
-            {testOverflow ? 'স্ট্যান্ডার্ড ভ্যালু (৳০)' : 'বৃহৎ সংখ্যা টেস্ট (৳১২,৩৪,৫৬৭)'}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveSection(activeSection === 'profile' ? 'home' : 'profile')}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#22B84A]/10 text-[#22B84A] hover:bg-[#22B84A]/20 cursor-pointer"
+            >
+              {activeSection === 'profile' ? 'হোমে ফিরে যান' : 'সেটিংস সেন্টার খুলুন'}
+            </button>
+            {activeSection === 'home' && (
+              <button
+                type="button"
+                onClick={() => setTestOverflow(!testOverflow)}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 text-[var(--hyper-text-primary)] hover:bg-black/10 cursor-pointer"
+              >
+                {testOverflow ? '৳০' : '৳১২,৩৪,৫৬৭'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Top Row: Date Card & Authenticated User Card */}
-        <div className="grid grid-cols-2 gap-3">
+        {activeSection === 'profile' && (
+          <SettingsCenter
+            key={settingsCategory || 'root'}
+            initialCategory={settingsCategory}
+          />
+        )}
+
+        {activeSection === 'home' && (
+          <>
+            {/* Top Row: Date Card & Authenticated User Card */}
+            <div className="grid grid-cols-2 gap-3">
           {/* Date Card */}
           <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-green-bg)] text-[#22B84A] flex items-center justify-center shrink-0 border border-[#22B84A]/20">
@@ -186,6 +216,8 @@ export const HyperOSComponentShowcase: React.FC = () => {
               পারিবারিক সম্পত্তি, ফ্ল্যাট ভাড়াটিয়া, মাসিক আয়-ব্যয় এবং স্বচ্ছ মুনাফা বণ্টন ও রিজার্ভ ফান্ডের সমন্বিত ডিজিটাল প্ল্যাটফর্ম। কোনো টেক্সট ওভারফ্লো বা হরাইজন্টাল স্ক্রলবার নেই।
             </div>
           </HyperCard>
+        )}
+          </>
         )}
       </main>
 

@@ -16,11 +16,8 @@ import { getDhakaDateInfo, getUserDisplayName } from '../utils/dhakaDate';
 import SimpleRentPaymentModal from './khata/SimpleRentPaymentModal';
 import SimpleExpenseModal from './khata/SimpleExpenseModal';
 import SimpleTenantDetailsModal from './khata/SimpleTenantDetailsModal';
-import SimpleAppSettingsModal from './khata/SimpleAppSettingsModal';
-import {
-  type AppPreferences,
-  DEFAULT_PREFERENCES,
-} from '../types/appPreferences';
+import { useSettings } from '../contexts/SettingsContext';
+import { SettingsCenter } from './settings/SettingsCenter';
 
 // Lucide Icons
 import {
@@ -31,22 +28,16 @@ import {
   House,
   BookOpen,
   UserRound,
-  LogOut,
   ArrowDownLeft,
   ArrowUpRight,
   Clock,
   TrendingDown,
   Coins,
-  Settings,
   CreditCard,
   ReceiptText,
-  UserPlus,
   BarChart3,
   Users,
-  KeyRound,
   Scale,
-  DoorClosed,
-  Languages,
   Hourglass,
 } from 'lucide-react';
 
@@ -56,7 +47,6 @@ import UnitModal from './properties/UnitModal';
 import TenantModal from './tenants/TenantModal';
 import { MemberManagementModal } from './members/MemberManagementModal';
 import { LiquidGlass } from './ui/LiquidGlass';
-import { LanguageSelector } from './common/LanguageSelector';
 import { HyperCard, StatTile, FloatingPillNav } from './ui/hyperos';
 
 // Existing Sub-Views (Lazy Loaded for drill-downs & full view access)
@@ -79,10 +69,9 @@ function TabLoadingFallback() {
 }
 
 export default function AdminDashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { workspaceId, role, isMasterAdmin, canAccessTab } = useWorkspace();
   const { currentLanguage, t } = useLanguage();
-  const [loggingOut, setLoggingOut] = useState(false);
 
   // 3 Primary Sections: 'home' | 'accounts' | 'profile'
   const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile'>('home');
@@ -100,8 +89,10 @@ export default function AdminDashboard() {
     return `${y}-${m}`;
   });
 
-  // App Preferences for Master Admin customization
-  const [preferences, setPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
+  // Centralized App Settings
+  const { settings } = useSettings();
+  const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
+  const isBn = currentLanguage === 'bn';
 
   // Modals state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -109,7 +100,6 @@ export default function AdminDashboard() {
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [tenantDetailsModalOpen, setTenantDetailsModalOpen] = useState(false);
   const [selectedTenantForDetails, setSelectedTenantForDetails] = useState<Tenant | null>(null);
-  const [appSettingsModalOpen, setAppSettingsModalOpen] = useState(false);
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
   const [unitModalOpen, setUnitModalOpen] = useState(false);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
@@ -167,16 +157,6 @@ export default function AdminDashboard() {
       unsubExpenses();
     };
   }, [user, workspaceId]);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await logout();
-    } catch (err) {
-      console.error('Logout error:', err);
-      setLoggingOut(false);
-    }
-  }
 
   // Month navigation helpers
   function handlePrevMonth() {
@@ -339,9 +319,6 @@ export default function AdminDashboard() {
                 <span>{t('navigation.profile')}</span>
               </button>
             </div>
-
-            {/* Language Switcher in Header */}
-            <LanguageSelector compact />
           </div>
         </div>
       </header>
@@ -418,88 +395,131 @@ export default function AdminDashboard() {
         {!drillDownView && activeSection === 'home' && (
           <div className="space-y-4 sm:space-y-5">
             {/* Top Row: Date Card & Authenticated User Name Card */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              {/* Date Card */}
-              <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-green-bg)] text-[#22B84A] flex items-center justify-center shrink-0 border border-[#22B84A]/20">
-                  <Calendar className="w-5 h-5 text-[#22B84A]" strokeWidth={2.2} />
+            {settings.dashboard.sections.find((s) => s.id === 'banner')?.visible !== false && (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                {/* Date Card */}
+                <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-green-bg)] text-[#22B84A] flex items-center justify-center shrink-0 border border-[#22B84A]/20">
+                    <Calendar className="w-5 h-5 text-[#22B84A]" strokeWidth={2.2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-[var(--hyper-text-primary)] truncate">
+                      {dhakaDate.weekdayLine}
+                    </div>
+                    <div className="text-xs sm:text-sm text-[var(--hyper-text-secondary)] font-medium truncate mt-0.5">
+                      {dhakaDate.fullDate}
+                    </div>
+                  </div>
+                </HyperCard>
+
+                {/* Authenticated User Name Card */}
+                <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-purple-bg)] text-[#7655E8] flex items-center justify-center shrink-0 border border-[#7655E8]/20">
+                    <UserRound className="w-5 h-5 text-[#7655E8]" strokeWidth={2.2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium text-[var(--hyper-text-secondary)] truncate">
+                      {isMasterAdmin ? t('common.roles.master_admin') : (role === 'manager' ? t('common.roles.manager') : t('common.roles.viewer'))}
+                    </div>
+                    <div className="text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] truncate mt-0.5">
+                      {userName}
+                    </div>
+                  </div>
+                </HyperCard>
+              </div>
+            )}
+
+            {/* Dynamic Financial Summary Cards (Ordered & Configured via Admin Settings) */}
+            {settings.dashboard.sections.find((s) => s.id === 'financialSummary')?.visible !== false && (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                {[...settings.dashboard.financialCards]
+                  .filter((c) => c.visible)
+                  .sort((a, b) => a.order - b.order)
+                  .map((card) => {
+                    switch (card.id) {
+                      case 'totalCollected':
+                        return (
+                          <StatTile
+                            key={card.id}
+                            label={isBn ? card.labelBn : card.labelEn}
+                            subtitle={formatLocalizedMonth(selectedMonth, currentLanguage)}
+                            amount={formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
+                            icon={ArrowDownLeft}
+                            color={card.color}
+                            trend="up"
+                            trendText={t('dashboard.statusPaid')}
+                          />
+                        );
+                      case 'totalDue':
+                        return (
+                          <StatTile
+                            key={card.id}
+                            label={isBn ? card.labelBn : card.labelEn}
+                            subtitle={t('dashboard.remainingCollectable')}
+                            amount={formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
+                            icon={Hourglass}
+                            color={card.color}
+                            trend="down"
+                            trendText={t('dashboard.statusDue')}
+                          />
+                        );
+                      case 'totalExpenses':
+                        return (
+                          <StatTile
+                            key={card.id}
+                            label={isBn ? card.labelBn : card.labelEn}
+                            subtitle={t('dashboard.maintenanceAndBills')}
+                            amount={formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
+                            icon={TrendingDown}
+                            color={card.color}
+                          />
+                        );
+                      case 'cashInHand':
+                        return (
+                          <StatTile
+                            key={card.id}
+                            label={isBn ? card.labelBn : card.labelEn}
+                            subtitle={t('dashboard.netCashAfterExpenses')}
+                            amount={formatLocalizedCurrency(cashInHand, currentLanguage, useBanglaNumerals)}
+                            icon={Coins}
+                            color={card.color}
+                          />
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+              </div>
+            )}
+
+            {/* Optional Quick Actions Bar from Settings */}
+            {settings.dashboard.sections.find((s) => s.id === 'quickActions')?.visible && (
+              <HyperCard className="p-3.5 sm:p-4 space-y-3">
+                <div className="text-xs font-bold text-[var(--hyper-text-secondary)] uppercase tracking-wider">
+                  {isBn ? 'দ্রুত কাজ (Quick Actions)' : 'Quick Actions'}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-[var(--hyper-text-primary)] truncate">
-                    {dhakaDate.weekdayLine}
-                  </div>
-                  <div className="text-xs sm:text-sm text-[var(--hyper-text-secondary)] font-medium truncate mt-0.5">
-                    {dhakaDate.fullDate}
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {settings.dashboard.quickActions
+                    .filter((qa) => qa.visible)
+                    .sort((a, b) => a.order - b.order)
+                    .map((qa) => (
+                      <button
+                        key={qa.id}
+                        type="button"
+                        onClick={() => {
+                          if (qa.id === 'rentDeposit') setPaymentModalOpen(true);
+                          if (qa.id === 'newExpense') setExpenseModalOpen(true);
+                          if (qa.id === 'addTenant') setTenantModalOpen(true);
+                          if (qa.id === 'allAccounts') setActiveSection('accounts');
+                        }}
+                        className="p-3 rounded-[18px] bg-black/5 dark:bg-white/5 hover:bg-black/10 text-xs font-bold text-[var(--hyper-text-primary)] transition-all flex flex-col items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>{isBn ? qa.labelBn : qa.labelEn}</span>
+                      </button>
+                    ))}
                 </div>
               </HyperCard>
-
-              {/* Authenticated User Name Card */}
-              <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-purple-bg)] text-[#7655E8] flex items-center justify-center shrink-0 border border-[#7655E8]/20">
-                  <UserRound className="w-5 h-5 text-[#7655E8]" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-medium text-[var(--hyper-text-secondary)] truncate">
-                    {isMasterAdmin ? t('common.roles.master_admin') : (role === 'manager' ? t('common.roles.manager') : t('common.roles.viewer'))}
-                  </div>
-                  <div className="text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] truncate mt-0.5">
-                    {userName}
-                  </div>
-                </div>
-              </HyperCard>
-            </div>
-
-            {/* Exactly 4 Financial Summary Cards in a 2-Column Grid */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              {/* Card 1: মোট জমা */}
-              {preferences.showTotalCollected && (
-                <StatTile
-                  label={t('dashboard.totalCollectedShort')}
-                  subtitle={formatLocalizedMonth(selectedMonth, currentLanguage)}
-                  amount={formatLocalizedCurrency(totalRentCollected, currentLanguage, preferences.useBanglaNumerals)}
-                  icon={ArrowDownLeft}
-                  color="green"
-                  trend="up"
-                  trendText={t('dashboard.statusPaid')}
-                />
-              )}
-
-              {/* Card 2: মোট বাকি */}
-              {preferences.showTotalDue && (
-                <StatTile
-                  label={t('dashboard.totalDueShort')}
-                  subtitle={t('dashboard.remainingCollectable')}
-                  amount={formatLocalizedCurrency(totalRentDue, currentLanguage, preferences.useBanglaNumerals)}
-                  icon={Hourglass}
-                  color="red"
-                  trend="down"
-                  trendText={t('dashboard.statusDue')}
-                />
-              )}
-
-              {/* Card 3: মোট খরচ */}
-              {preferences.showTotalExpenses && (
-                <StatTile
-                  label={t('dashboard.totalExpenses')}
-                  subtitle={t('dashboard.maintenanceAndBills')}
-                  amount={formatLocalizedCurrency(totalExpenses, currentLanguage, preferences.useBanglaNumerals)}
-                  icon={TrendingDown}
-                  color="orange"
-                />
-              )}
-
-              {/* Card 4: হাতে আছে (Cash in hand) */}
-              {preferences.showCashInHand && (
-                <StatTile
-                  label={t('dashboard.cashInHand')}
-                  subtitle={t('dashboard.netCashAfterExpenses')}
-                  amount={formatLocalizedCurrency(cashInHand, currentLanguage, preferences.useBanglaNumerals)}
-                  icon={Coins}
-                  color="blue"
-                />
-              )}
-            </div>
+            )}
           </div>
         )}
 
@@ -542,7 +562,7 @@ export default function AdminDashboard() {
                 <div className="text-right">
                   <span className="text-xs text-emerald-200">{t('accounts.totalAvailableCash')}</span>
                   <div className="text-2xl sm:text-3xl font-black text-emerald-300">
-                    {formatLocalizedCurrency(cashInHand, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(cashInHand, currentLanguage, useBanglaNumerals)}
                   </div>
                 </div>
               </div>
@@ -552,25 +572,25 @@ export default function AdminDashboard() {
                 <div>
                   <span className="text-emerald-200/80 block">{t('accounts.metrics.rentCollected')}</span>
                   <span className="text-base font-bold text-white">
-                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <div>
                   <span className="text-emerald-200/80 block">{t('accounts.metrics.rentDue')}</span>
                   <span className="text-base font-bold text-red-300">
-                    {formatLocalizedCurrency(totalRentDue, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <div>
                   <span className="text-emerald-200/80 block">{t('accounts.metrics.totalExpenses')}</span>
                   <span className="text-base font-bold text-amber-300">
-                    {formatLocalizedCurrency(totalExpenses, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <div>
                   <span className="text-emerald-200/80 block">{t('accounts.metrics.familyPayout')}</span>
                   <span className="text-base font-bold text-emerald-200">
-                    {formatLocalizedCurrency(familyPayoutsTotal, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(familyPayoutsTotal, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
               </div>
@@ -606,7 +626,7 @@ export default function AdminDashboard() {
                 <div className="p-3 bg-white/70 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 shadow-2xs">
                   <span className="text-slate-600">{t('accounts.cards.rentCollection.currMonthTotal')}</span>
                   <span className="font-bold text-emerald-700 text-sm">
-                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <button
@@ -649,7 +669,7 @@ export default function AdminDashboard() {
                 <div className="p-3 bg-white/70 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 shadow-2xs">
                   <span className="text-slate-600">{t('accounts.cards.expenses.currMonthTotal')}</span>
                   <span className="font-bold text-amber-700 text-sm">
-                    {formatLocalizedCurrency(totalExpenses, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <button
@@ -741,7 +761,7 @@ export default function AdminDashboard() {
                 <div className="p-3 bg-red-50/80 border border-red-100 rounded-2xl flex justify-between items-center text-xs shadow-2xs">
                   <span className="text-red-900 font-semibold">{t('accounts.cards.reports.totalDue')}</span>
                   <span className="font-bold text-red-700 text-sm">
-                    {formatLocalizedCurrency(totalRentDue, currentLanguage, preferences.useBanglaNumerals)}
+                    {formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
                 <button
@@ -793,7 +813,7 @@ export default function AdminDashboard() {
                 <div className="p-2.5 rounded-2xl bg-white/70 border border-white/80 shadow-2xs">
                   <span className="text-slate-500 block">{t('dashboard.totalUnits')}</span>
                   <span className="font-bold text-slate-800 text-sm">
-                    {preferences.useBanglaNumerals && currentLanguage === 'bn'
+                    {useBanglaNumerals && currentLanguage === 'bn'
                       ? (activeUnits.length > 0 ? activeUnits.length : 1).toLocaleString('bn-BD')
                       : activeUnits.length > 0
                       ? activeUnits.length
@@ -804,7 +824,7 @@ export default function AdminDashboard() {
                 <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 shadow-2xs">
                   <span className="text-emerald-800 block">{t('dashboard.occupiedUnits')}</span>
                   <span className="font-bold text-emerald-900 text-sm">
-                    {preferences.useBanglaNumerals && currentLanguage === 'bn'
+                    {useBanglaNumerals && currentLanguage === 'bn'
                       ? (activeTenants.length > 0 ? activeTenants.length : 1).toLocaleString('bn-BD')
                       : activeTenants.length > 0
                       ? activeTenants.length
@@ -815,7 +835,7 @@ export default function AdminDashboard() {
                 <div className="p-2.5 rounded-2xl bg-white/70 border border-white/80 shadow-2xs">
                   <span className="text-slate-500 block">{t('dashboard.vacantUnits')}</span>
                   <span className="font-bold text-slate-800 text-sm">
-                    {preferences.useBanglaNumerals && currentLanguage === 'bn' ? '০' : '0'}{' '}
+                    {useBanglaNumerals && currentLanguage === 'bn' ? '০' : '0'}{' '}
                     {t('dashboard.unitsCountUnit')}
                   </span>
                 </div>
@@ -910,19 +930,19 @@ export default function AdminDashboard() {
                           <div>
                             <span className="text-slate-500 block text-[10px]">{t('dashboard.monthlyRentLabel')}</span>
                             <span className="font-bold text-slate-800">
-                              {formatLocalizedCurrency(tItem.monthlyRent, currentLanguage, preferences.useBanglaNumerals)}
+                              {formatLocalizedCurrency(tItem.monthlyRent, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                           <div>
                             <span className="text-slate-500 block text-[10px]">{t('dashboard.rentCollected')}</span>
                             <span className="font-bold text-emerald-700">
-                              {formatLocalizedCurrency(status.paid, currentLanguage, preferences.useBanglaNumerals)}
+                              {formatLocalizedCurrency(status.paid, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                           <div>
                             <span className="text-slate-500 block text-[10px]">{t('dashboard.rentRemaining')}</span>
                             <span className="font-bold text-red-600">
-                              {formatLocalizedCurrency(status.due, currentLanguage, preferences.useBanglaNumerals)}
+                              {formatLocalizedCurrency(status.due, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                         </div>
@@ -981,7 +1001,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-emerald-800 text-sm">
-                          +{formatLocalizedCurrency(p.amount, currentLanguage, preferences.useBanglaNumerals)}
+                          +{formatLocalizedCurrency(p.amount, currentLanguage, useBanglaNumerals)}
                         </div>
                         <div className="text-[10px] text-slate-400">
                           {p.paymentDate?.toDate?.()?.toLocaleDateString() || String(p.billingMonth)}
@@ -1006,7 +1026,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-amber-800 text-sm">
-                          -{formatLocalizedCurrency(e.amount, currentLanguage, preferences.useBanglaNumerals)}
+                          -{formatLocalizedCurrency(e.amount, currentLanguage, useBanglaNumerals)}
                         </div>
                         <div className="text-[10px] text-slate-400">{e.expenseDate}</div>
                       </div>
@@ -1019,183 +1039,12 @@ export default function AdminDashboard() {
         )}
 
         {/* --------------------------------------------------------------------- */}
-        {/* SECTION 3: প্রোফাইল (PROFILE & SETTINGS)                              */}
+        {/* SECTION 3: সেন্ট্রালাইজড অ্যাডমিন সেটিংস সেন্টার (SETTINGS CENTER)     */}
         {/* --------------------------------------------------------------------- */}
         {!drillDownView && activeSection === 'profile' && (
-          <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5">
-            {/* 1. Simplified User Profile Card */}
-            <LiquidGlass
-              className="p-5 sm:p-6 rounded-3xl border border-white/80 shadow-xs flex items-center justify-between transition"
-              scale={-100}
-              chroma={5}
-              blur={4}
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-700/20 border border-white/30 shrink-0">
-                  <UserRound className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900 leading-tight">
-                    {userName}
-                  </h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span
-                      className={`px-3 py-0.5 rounded-full text-xs font-bold border ${
-                        isMasterAdmin
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : role === 'manager'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}
-                    >
-                      {isMasterAdmin
-                        ? t('common.roles.master_admin')
-                        : role === 'manager'
-                        ? t('common.roles.manager')
-                        : t('common.roles.viewer')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </LiquidGlass>
-
-            {/* 2. Master Admin Member Management Card */}
-            {isMasterAdmin && (
-              <LiquidGlass
-                className="p-5 sm:p-6 rounded-3xl border border-purple-200/80 shadow-xs space-y-4"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
-                <div className="flex items-center justify-between pb-3 border-b border-purple-100">
-                  <div className="flex items-center gap-2.5">
-                    <Users className="w-5 h-5 text-purple-700" />
-                    <h3 className="font-bold text-slate-900 text-lg">{t('profile.memberManagementTitle')}</h3>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                    {t('profile.masterAdminOnlyBadge')}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600">
-                  {t('profile.memberManagementDesc')}
-                </p>
-
-                <div className="pt-1">
-                  <button
-                    onClick={() => setMemberManagementModalOpen(true)}
-                    className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-900 font-bold text-xs transition flex items-center justify-between shadow-2xs group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center text-lg shadow-sm">
-                        <KeyRound className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-bold text-purple-950">{t('profile.memberManagementBtnTitle')}</div>
-                        <div className="text-[11px] text-purple-700/80 font-normal mt-0.5">
-                          {t('profile.memberManagementBtnSubtitle')}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-purple-600 group-hover:translate-x-1 transition text-lg">→</span>
-                  </button>
-                </div>
-              </LiquidGlass>
-            )}
-
-            {/* 3. Exactly One Settings Section (Language Selector + Controls) */}
-            <LiquidGlass
-              className="p-5 sm:p-6 rounded-3xl border border-white/80 shadow-xs space-y-5"
-              scale={-100}
-              chroma={5}
-              blur={4}
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <Settings className="w-5 h-5 text-emerald-700" />
-                  <h3 className="font-bold text-slate-900 text-lg">{t('profile.appSettingsTitle')}</h3>
-                </div>
-                {isMasterAdmin && (
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    {t('profile.masterAdminOnlyBadge')}
-                  </span>
-                )}
-              </div>
-
-              {/* Language Preferences */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                  <Languages className="w-4 h-4 text-emerald-700" />
-                  <span>{t('profile.languagePreferencesTitle')}</span>
-                </label>
-                <p className="text-xs text-slate-500">
-                  {t('profile.languagePreferencesDesc')}
-                </p>
-                <div className="pt-1 flex justify-center sm:justify-start">
-                  <LanguageSelector />
-                </div>
-              </div>
-
-              {/* Master Admin App Settings & Management */}
-              {isMasterAdmin && (
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <p className="text-xs text-slate-500">
-                    {t('profile.appSettingsDesc')}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <button
-                      onClick={() => setAppSettingsModalOpen(true)}
-                      className="p-3.5 rounded-2xl bg-emerald-50/80 hover:bg-emerald-100/70 border border-emerald-200 text-emerald-900 font-bold text-xs transition text-left flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{t('profile.homeCardsAndQuickBtn')}</span>
-                      <span>→</span>
-                    </button>
-
-                    <button
-                      onClick={() => setPropertyModalOpen(true)}
-                      className="p-3.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-200 text-slate-800 font-bold text-xs transition text-left flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{t('profile.addPropertyBtn')}</span>
-                      <Building2 className="w-4 h-4 text-slate-600" />
-                    </button>
-
-                    <button
-                      onClick={() => setUnitModalOpen(true)}
-                      className="p-3.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-200 text-slate-800 font-bold text-xs transition text-left flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{t('profile.addUnitBtn')}</span>
-                      <DoorClosed className="w-4 h-4 text-slate-600" />
-                    </button>
-
-                    <button
-                      onClick={() => setTenantModalOpen(true)}
-                      className="p-3.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-200 text-slate-800 font-bold text-xs transition text-left flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{t('profile.registerTenantBtn')}</span>
-                      <UserPlus className="w-4 h-4 text-slate-600" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </LiquidGlass>
-
-            {/* 4. Single Sign Out Action */}
-            <LiquidGlass
-              className="p-4 rounded-3xl border border-red-200/60 shadow-xs"
-              scale={-100}
-              chroma={4}
-              blur={4}
-            >
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="w-full py-3.5 rounded-2xl border border-red-300 bg-red-500/10 hover:bg-red-500/20 text-red-700 font-bold text-sm transition shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <LogOut className="w-4 h-4 text-red-700" />
-                <span>{loggingOut ? t('profile.signingOut') : t('profile.signOutBtn')}</span>
-              </button>
-            </LiquidGlass>
-          </div>
+          <SettingsCenter
+            onOpenMemberManagement={() => setMemberManagementModalOpen(true)}
+          />
         )}
       </main>
 
@@ -1278,17 +1127,6 @@ export default function AdminDashboard() {
         payments={payments}
         onOpenPaymentModal={(tenantId) => handleOpenPaymentForTenant(tenantId)}
         canManageRent={canAccessTab('rent')}
-      />
-
-      {/* Simple App Settings Modal (Master Admin) */}
-      <SimpleAppSettingsModal
-        isOpen={appSettingsModalOpen}
-        onClose={() => setAppSettingsModalOpen(false)}
-        properties={activeProperties}
-        preferences={preferences}
-        onUpdatePreferences={(newPrefs) => setPreferences(newPrefs)}
-        onOpenPropertyModal={() => setPropertyModalOpen(true)}
-        onOpenUnitModal={() => setUnitModalOpen(true)}
       />
 
       {/* Property Creation Modal */}

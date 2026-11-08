@@ -2,6 +2,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import LoginPage from './components/LoginPage';
 import AdminDashboard from './components/AdminDashboard';
 import LoadingScreen from './components/LoadingScreen';
@@ -49,8 +50,10 @@ export default function App() {
       <AuthProvider>
         <LanguageProvider>
           <WorkspaceProvider>
-            <OfflineStatusBanner />
-            <AppRouter />
+            <SettingsProvider>
+              <OfflineStatusBanner />
+              <AppRouter />
+            </SettingsProvider>
           </WorkspaceProvider>
         </LanguageProvider>
       </AuthProvider>
