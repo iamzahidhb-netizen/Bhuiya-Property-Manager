@@ -13,8 +13,8 @@ function AppRouter() {
   const { user, loading: authLoading } = useAuth();
   const { membership, loading: workspaceLoading, error: workspaceError, retryMembershipLookup } = useWorkspace();
 
-  // Phase 2 Preview Mode for Xiaomi HyperOS Component Showcase (isolated, non-destructive)
-  if (typeof window !== 'undefined' && window.location.search.includes('preview=hyperos')) {
+  // Dev-only Preview Mode for Xiaomi HyperOS Component Showcase (stripped in production builds)
+  if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.search.includes('preview=hyperos')) {
     return <HyperOSComponentShowcase />;
   }
 

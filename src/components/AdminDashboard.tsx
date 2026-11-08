@@ -56,8 +56,8 @@ import UnitModal from './properties/UnitModal';
 import TenantModal from './tenants/TenantModal';
 import { MemberManagementModal } from './members/MemberManagementModal';
 import { LiquidGlass } from './ui/LiquidGlass';
-import { LiquidGlassDock } from './navigation/LiquidGlassDock';
 import { LanguageSelector } from './common/LanguageSelector';
+import { HyperCard, StatTile, FloatingPillNav } from './ui/hyperos';
 
 // Existing Sub-Views (Lazy Loaded for drill-downs & full view access)
 const PropertyManagementView = lazy(() => import('./properties/PropertyManagementView'));
@@ -255,22 +255,22 @@ export default function AdminDashboard() {
   const userName = getUserDisplayName(user?.displayName, user?.email);
 
   return (
-    <div className="min-h-screen ambient-emerald-bg flex flex-col text-slate-800 pb-28 sm:pb-32 antialiased relative overflow-x-hidden">
-      {/* Dynamic Ambient Background Highlights without continuous repaint animation */}
+    <div className="min-h-screen hyper-ambient-bg flex flex-col text-[var(--hyper-text-primary)] antialiased relative overflow-x-hidden">
+      {/* Dynamic Ambient Background Highlights */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true" style={{ contain: 'strict' }}>
-        <div className="absolute top-10 right-10 w-[500px] h-[500px] bg-emerald-400/15 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-10 w-[450px] h-[450px] bg-teal-400/15 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/3 w-[600px] h-[600px] bg-emerald-300/10 rounded-full blur-3xl" />
+        <div className="absolute top-10 right-10 w-[500px] h-[500px] bg-[#22B84A]/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 left-10 w-[450px] h-[450px] bg-[#1685E8]/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/3 w-[600px] h-[600px] bg-[#22B84A]/5 rounded-full blur-3xl" />
       </div>
 
       {/* ========================================================================= */}
       {/* 1. TOP HEADER                                                             */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-white/60 shadow-xs">
+      <header className="sticky top-0 z-40 bg-[var(--hyper-bg-card)]/80 backdrop-blur-xl border-b border-[var(--hyper-border-subtle)] shadow-xs transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           {/* Official Brand Logo & Name */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-md shadow-emerald-700/15 border border-emerald-100 flex items-center justify-center shrink-0 overflow-hidden">
+            <div className="w-11 h-11 rounded-[16px] bg-white dark:bg-[#252528] p-1.5 shadow-sm border border-[var(--hyper-border-subtle)] flex items-center justify-center shrink-0 overflow-hidden">
               <img
                 src="/brand/anwar-bhuiyan-property.svg"
                 alt="Anwar Bhuiyan Property Logo"
@@ -278,10 +278,10 @@ export default function AdminDashboard() {
               />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+              <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
                 {t('app.title')}
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="text-xs text-[var(--hyper-text-secondary)] font-medium">
                 {t('app.subtitle')}
               </p>
             </div>
@@ -289,23 +289,18 @@ export default function AdminDashboard() {
 
           {/* Right Controls: Desktop Nav Pills & Compact Language Selector */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Desktop 3-Section Floating Liquid Glass Navigation Dock */}
-            <LiquidGlass
-              as="div"
-              className="hidden md:flex items-center gap-1.5 p-1 rounded-full border border-white/80 shadow-sm bg-white/75"
-              scale={-70}
-              chroma={4}
-              blur={6}
-            >
+            {/* Desktop 3-Section Floating Navigation Dock */}
+            <div className="hidden md:flex items-center gap-1.5 p-1 rounded-full border border-[var(--hyper-border)] shadow-xs bg-[var(--hyper-bg-card)]">
               <button
+                type="button"
                 onClick={() => {
                   setActiveSection('home');
                   setDrillDownView(null);
                 }}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'home' && !drillDownView
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
-                    : 'text-slate-600 hover:text-emerald-800 hover:bg-white/60'
+                    ? 'bg-[#22B84A] text-white shadow-sm shadow-[#22B84A]/30'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
                 }`}
               >
                 <House className="w-3.5 h-3.5" />
@@ -313,14 +308,15 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   setActiveSection('accounts');
                   setDrillDownView(null);
                 }}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'accounts' && !drillDownView
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
-                    : 'text-slate-600 hover:text-emerald-800 hover:bg-white/60'
+                    ? 'bg-[#1685E8] text-white shadow-sm shadow-[#1685E8]/30'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -328,20 +324,21 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   setActiveSection('profile');
                   setDrillDownView(null);
                 }}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'profile' && !drillDownView
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/25 border border-white/20'
-                    : 'text-slate-600 hover:text-emerald-800 hover:bg-white/60'
+                    ? 'bg-[#7655E8] text-white shadow-sm shadow-[#7655E8]/30'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
                 }`}
               >
                 <UserRound className="w-3.5 h-3.5" />
                 <span>{t('navigation.profile')}</span>
               </button>
-            </LiquidGlass>
+            </div>
 
             {/* Language Switcher in Header */}
             <LanguageSelector compact />
@@ -352,7 +349,7 @@ export default function AdminDashboard() {
       {/* ========================================================================= */}
       {/* 2. MAIN CONTAINER & SUB-VIEWS / SECTIONS                                 */}
       {/* ========================================================================= */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-8 flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full space-y-6">
         {/* Drill-down Back Button if inside a detailed view */}
         {drillDownView && (
           <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
@@ -423,121 +420,84 @@ export default function AdminDashboard() {
             {/* Top Row: Date Card & Authenticated User Name Card */}
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {/* Date Card */}
-              <LiquidGlass
-                className="p-3.5 sm:p-4 rounded-3xl border border-white/80 shadow-xs flex items-center gap-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                  <Calendar className="w-5 h-5 text-emerald-700" />
+              <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-green-bg)] text-[#22B84A] flex items-center justify-center shrink-0 border border-[#22B84A]/20">
+                  <Calendar className="w-5 h-5 text-[#22B84A]" strokeWidth={2.2} />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-[var(--hyper-text-primary)] truncate">
                     {dhakaDate.weekdayLine}
                   </div>
-                  <div className="text-xs sm:text-sm text-slate-600 font-medium truncate">
+                  <div className="text-xs sm:text-sm text-[var(--hyper-text-secondary)] font-medium truncate mt-0.5">
                     {dhakaDate.fullDate}
                   </div>
                 </div>
-              </LiquidGlass>
+              </HyperCard>
 
               {/* Authenticated User Name Card */}
-              <LiquidGlass
-                className="p-3.5 sm:p-4 rounded-3xl border border-white/80 shadow-xs flex items-center justify-center sm:justify-start gap-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
-                <div className="w-10 h-10 rounded-2xl bg-slate-200/80 text-slate-700 flex items-center justify-center shrink-0 border border-slate-300/60">
-                  <UserRound className="w-5 h-5 text-slate-700" />
+              <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-purple-bg)] text-[#7655E8] flex items-center justify-center shrink-0 border border-[#7655E8]/20">
+                  <UserRound className="w-5 h-5 text-[#7655E8]" strokeWidth={2.2} />
                 </div>
-                <div className="text-sm sm:text-base font-bold text-slate-900 truncate">
-                  {userName}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-medium text-[var(--hyper-text-secondary)] truncate">
+                    {isMasterAdmin ? t('common.roles.master_admin') : (role === 'manager' ? t('common.roles.manager') : t('common.roles.viewer'))}
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] truncate mt-0.5">
+                    {userName}
+                  </div>
                 </div>
-              </LiquidGlass>
+              </HyperCard>
             </div>
 
             {/* Exactly 4 Financial Summary Cards in a 2-Column Grid */}
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {/* Card 1: মোট জমা */}
               {preferences.showTotalCollected && (
-                <LiquidGlass
-                  className="p-4 sm:p-5 rounded-3xl border border-white/80 shadow-xs hover:shadow-md flex flex-col justify-between transition min-h-[110px]"
-                  scale={-110}
-                  chroma={6}
-                  blur={4}
-                >
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-emerald-900 mb-2">
-                    <span>{t('dashboard.totalCollectedShort')}</span>
-                    <span className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center text-sm shadow-2xs border border-emerald-500/20">
-                      <ArrowDownLeft className="w-4 h-4 text-emerald-700" />
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, preferences.useBanglaNumerals)}
-                  </div>
-                </LiquidGlass>
+                <StatTile
+                  label={t('dashboard.totalCollectedShort')}
+                  subtitle={formatLocalizedMonth(selectedMonth, currentLanguage)}
+                  amount={formatLocalizedCurrency(totalRentCollected, currentLanguage, preferences.useBanglaNumerals)}
+                  icon={ArrowDownLeft}
+                  color="green"
+                  trend="up"
+                  trendText={t('dashboard.statusPaid')}
+                />
               )}
 
               {/* Card 2: মোট বাকি */}
               {preferences.showTotalDue && (
-                <LiquidGlass
-                  className="p-4 sm:p-5 rounded-3xl border border-white/80 shadow-xs hover:shadow-md flex flex-col justify-between transition min-h-[110px]"
-                  scale={-110}
-                  chroma={6}
-                  blur={4}
-                >
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-red-700 mb-2">
-                    <span>{t('dashboard.totalDueShort')}</span>
-                    <span className="w-8 h-8 rounded-xl bg-red-500/15 text-red-600 flex items-center justify-center text-sm shadow-2xs border border-red-500/20">
-                      <Hourglass className="w-4 h-4 text-red-600" />
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-red-600 tracking-tight">
-                    {formatLocalizedCurrency(totalRentDue, currentLanguage, preferences.useBanglaNumerals)}
-                  </div>
-                </LiquidGlass>
+                <StatTile
+                  label={t('dashboard.totalDueShort')}
+                  subtitle={t('dashboard.remainingCollectable')}
+                  amount={formatLocalizedCurrency(totalRentDue, currentLanguage, preferences.useBanglaNumerals)}
+                  icon={Hourglass}
+                  color="red"
+                  trend="down"
+                  trendText={t('dashboard.statusDue')}
+                />
               )}
 
               {/* Card 3: মোট খরচ */}
               {preferences.showTotalExpenses && (
-                <LiquidGlass
-                  className="p-4 sm:p-5 rounded-3xl border border-white/80 shadow-xs hover:shadow-md flex flex-col justify-between transition min-h-[110px]"
-                  scale={-110}
-                  chroma={6}
-                  blur={4}
-                >
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-amber-800 mb-2">
-                    <span>{t('dashboard.totalExpenses')}</span>
-                    <span className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center text-sm shadow-2xs border border-amber-500/20">
-                      <TrendingDown className="w-4 h-4 text-amber-600" />
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    {formatLocalizedCurrency(totalExpenses, currentLanguage, preferences.useBanglaNumerals)}
-                  </div>
-                </LiquidGlass>
+                <StatTile
+                  label={t('dashboard.totalExpenses')}
+                  subtitle={t('dashboard.maintenanceAndBills')}
+                  amount={formatLocalizedCurrency(totalExpenses, currentLanguage, preferences.useBanglaNumerals)}
+                  icon={TrendingDown}
+                  color="orange"
+                />
               )}
 
               {/* Card 4: হাতে আছে (Cash in hand) */}
               {preferences.showCashInHand && (
-                <LiquidGlass
-                  className="p-4 sm:p-5 rounded-3xl border border-white/80 shadow-xs hover:shadow-md flex flex-col justify-between transition min-h-[110px]"
-                  scale={-110}
-                  chroma={6}
-                  blur={4}
-                >
-                  <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-teal-800 mb-2">
-                    <span>{t('dashboard.cashInHand')}</span>
-                    <span className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-600 flex items-center justify-center text-sm shadow-2xs border border-teal-500/20">
-                      <Coins className="w-4 h-4 text-teal-600" />
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-700 tracking-tight">
-                    {formatLocalizedCurrency(cashInHand, currentLanguage, preferences.useBanglaNumerals)}
-                  </div>
-                </LiquidGlass>
+                <StatTile
+                  label={t('dashboard.cashInHand')}
+                  subtitle={t('dashboard.netCashAfterExpenses')}
+                  amount={formatLocalizedCurrency(cashInHand, currentLanguage, preferences.useBanglaNumerals)}
+                  icon={Coins}
+                  color="blue"
+                />
               )}
             </div>
           </div>
@@ -1240,9 +1200,9 @@ export default function AdminDashboard() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 3. FIXED BOTTOM FIVE-OPTION FLOATING LIQUID GLASS DOCK                    */}
+      {/* 3. FIXED BOTTOM FIVE-OPTION FLOATING PILL NAVIGATION DOCK (HYPEROS)       */}
       {/* ========================================================================= */}
-      <LiquidGlassDock
+      <FloatingPillNav
         activeSection={activeSection}
         drillDownView={drillDownView}
         onSelectSection={(section) => {
