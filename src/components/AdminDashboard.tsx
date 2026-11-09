@@ -290,14 +290,29 @@ export default function AdminDashboard() {
   const activeUnits = units.filter((u) => !u.isArchived);
   const activeTenants = tenants.filter((t) => t.status === 'active');
 
-  const selectedMonthPayments = payments.filter((p) => p.billingMonth === selectedMonth);
+    const resolveDateMonth = (dateVal: unknown): string => {
+    if (!dateVal) return '';
+    if (typeof dateVal === 'string') return dateVal.slice(0, 7);
+    if (typeof (dateVal as { toDate?: () => Date }).toDate === 'function') {
+      try {
+        return (dateVal as { toDate: () => Date }).toDate().toISOString().slice(0, 7);
+      } catch (_) {
+        return '';
+      }
+    }
+    return '';
+  };
+
+  const selectedMonthPayments = payments.filter(
+    (p) => (p.billingMonth || resolveDateMonth(p.paymentDate)) === selectedMonth
+  );
   const totalRentCollected = selectedMonthPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  const selectedMonthBills = bills.filter((b) => b.billingMonth === selectedMonth);
+  const selectedMonthBills = bills.filter((b) => (b.billingMonth || resolveDateMonth(b.createdAt)) === selectedMonth);
   const totalRentDue = selectedMonthBills.reduce((sum, b) => sum + b.balanceDue, 0);
 
   const selectedMonthExpenses = expenses.filter(
-    (e) => e.billingMonth === selectedMonth && e.status === 'active'
+    (e) => (e.billingMonth || resolveDateMonth(e.expenseDate)) === selectedMonth && e.status === 'active'
   );
   const totalExpenses = selectedMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
 

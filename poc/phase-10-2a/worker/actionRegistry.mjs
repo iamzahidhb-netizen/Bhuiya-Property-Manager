@@ -533,7 +533,11 @@ export const ACTION_REGISTRY = {
           });
 
           const paymentId = idempotencyKey || `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const paymentMonth = billData?.billingMonth || (payload.paymentDate ? payload.paymentDate.slice(0, 7) : new Date().toISOString().slice(0, 7));
           tx.create(paymentPath, paymentId, {
+            billingMonth: paymentMonth,
+            tenantId: billData?.tenantId || payload.tenantId || null,
+            propertyId: billData?.propertyId || payload.propertyId || null,
             billId: payload.billId,
             amount: payload.amount,
             paymentMethod: payload.paymentMethod,

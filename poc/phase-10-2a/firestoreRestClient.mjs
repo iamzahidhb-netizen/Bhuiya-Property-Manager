@@ -400,9 +400,10 @@ export class FirestoreRestClient {
       }
     };
 
-    if (updateMaskFields && updateMaskFields.length > 0) {
-      write.updateMask = { fieldPaths: updateMaskFields };
-    }
+    const maskFields = (updateMaskFields && updateMaskFields.length > 0)
+      ? updateMaskFields
+      : Object.keys(data);
+    write.updateMask = { fieldPaths: maskFields };
 
     if (precondition) {
       write.currentDocument = precondition;
