@@ -13,6 +13,7 @@ import {
   BUILDING_CATEGORY_LABELS,
   FAMILY_CATEGORY_LABELS,
 } from './expenseService';
+import { parseTimestampMillis, formatDateSafe } from '../utils/dhakaDate';
 import type { Tenant } from '../types/tenant';
 import type { Property } from '../types/property';
 import type {
@@ -437,9 +438,7 @@ export function calculateTenantRentLedger(
 
   // Add payments
   tenantPayments.forEach((p) => {
-    const payDate = p.paymentDate
-      ? new Date(p.paymentDate.toMillis()).toISOString().split('T')[0]
-      : p.billingMonth + '-05';
+    const payDate = formatDateSafe(p.paymentDate || p.createdAt, p.billingMonth ? p.billingMonth + '-05' : '');
 
     entries.push({
       id: `pay_${p.id}`,
@@ -754,15 +753,13 @@ export function calculateReserveFundStatement(
 
   // Chronological sort
   const sorted = [...filtered].sort((a, b) => {
-    const timeA = a.createdAt?.toMillis() || 0;
-    const timeB = b.createdAt?.toMillis() || 0;
+    const timeA = parseTimestampMillis(a.createdAt);
+    const timeB = parseTimestampMillis(b.createdAt);
     return timeB - timeA;
   });
 
   const ledgerEntries = sorted.map((l) => {
-    const date = l.createdAt
-      ? new Date(l.createdAt.toMillis()).toISOString().split('T')[0]
-      : 'N/A';
+    const date = formatDateSafe(l.createdAt, 'N/A');
     return {
       id: l.id,
       date,

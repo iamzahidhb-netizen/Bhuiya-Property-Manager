@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createCallable } from '../lib/apiClient';
+import { parseTimestampMillis } from '../utils/dhakaDate';
 import type {
   Expense,
   ExpenseFormData,
@@ -101,8 +102,8 @@ export function subscribeExpenses(
         if (a.expenseDate !== b.expenseDate) {
           return b.expenseDate.localeCompare(a.expenseDate);
         }
-        const timeA = a.createdAt?.toMillis() || 0;
-        const timeB = b.createdAt?.toMillis() || 0;
+        const timeA = parseTimestampMillis(a.createdAt);
+        const timeB = parseTimestampMillis(b.createdAt);
         return timeB - timeA;
       });
 

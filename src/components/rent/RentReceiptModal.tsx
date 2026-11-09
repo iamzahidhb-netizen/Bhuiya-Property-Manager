@@ -1,4 +1,5 @@
 import type { RentBill, RentPayment } from '../../types/finance';
+import { formatDateSafe } from '../../utils/dhakaDate';
 
 interface RentReceiptModalProps {
   isOpen: boolean;
@@ -85,11 +86,7 @@ export default function RentReceiptModal({
                 <p className="text-xs text-slate-600">
                   তারিখ / Date:{' '}
                   <span className="font-semibold text-slate-900">
-                    {typeof payment.paymentDate === 'string'
-                      ? payment.paymentDate
-                      : payment.createdAt
-                      ? new Date(payment.createdAt.toMillis()).toISOString().split('T')[0]
-                      : new Date().toISOString().split('T')[0]}
+                    {formatDateSafe(payment.paymentDate || payment.createdAt, new Date().toISOString().split('T')[0])}
                   </span>
                 </p>
                 <p className="text-xs text-slate-600">

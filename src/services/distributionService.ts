@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createCallable } from '../lib/apiClient';
+import { parseTimestampMillis } from '../utils/dhakaDate';
 import type {
   Beneficiary,
   FamilyDistribution,
@@ -111,8 +112,8 @@ export function subscribeReserveLedger(
     });
     // Sort descending by created timestamp or client-side
     entries.sort((a, b) => {
-      const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
-      const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
+      const timeA = parseTimestampMillis(a.createdAt);
+      const timeB = parseTimestampMillis(b.createdAt);
       return timeB - timeA;
     });
     onUpdate(entries);

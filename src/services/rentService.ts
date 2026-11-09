@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createCallable } from '../lib/apiClient';
+import { parseTimestampMillis } from '../utils/dhakaDate';
 import type {
   RentBill,
   RentPayment,
@@ -72,7 +73,7 @@ export function subscribeRentBills(
       bills.sort((a, b) => {
         const weightDiff = (statusWeight[a.status] ?? 0) - (statusWeight[b.status] ?? 0);
         if (weightDiff !== 0) return weightDiff;
-        return a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true });
+        return (a.unitNumber || '').localeCompare(b.unitNumber || '', undefined, { numeric: true });
       });
 
       onUpdate(bills);
@@ -129,8 +130,8 @@ export function subscribeRentPayments(
 
       // Sort newest first
       payments.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis() || 0;
-        const timeB = b.createdAt?.toMillis() || 0;
+        const timeA = parseTimestampMillis(a.createdAt);
+        const timeB = parseTimestampMillis(b.createdAt);
         return timeB - timeA;
       });
 
@@ -163,8 +164,8 @@ export async function getPaymentsForBill(
   }));
 
   payments.sort((a, b) => {
-    const timeA = a.createdAt?.toMillis() || 0;
-    const timeB = b.createdAt?.toMillis() || 0;
+    const timeA = parseTimestampMillis(a.createdAt);
+    const timeB = parseTimestampMillis(b.createdAt);
     return timeB - timeA;
   });
 

@@ -237,12 +237,26 @@ export default function AdminDashboard() {
       workspaceId
     );
 
-    const unsubBills = subscribeRentBills(user.uid, {}, (fetchedBills) => setBills(fetchedBills));
-    const unsubPayments = subscribeRentPayments(user.uid, {}, (fetchedPayments) =>
-      setPayments(fetchedPayments)
+    const unsubBills = subscribeRentBills(
+      user.uid,
+      {},
+      (fetchedBills) => setBills(fetchedBills),
+      (err) => console.error('[AdminDashboard] subscribeRentBills error:', err),
+      workspaceId
     );
-    const unsubExpenses = subscribeExpenses(user.uid, {}, (fetchedExpenses) =>
-      setExpenses(fetchedExpenses)
+    const unsubPayments = subscribeRentPayments(
+      user.uid,
+      {},
+      (fetchedPayments) => setPayments(fetchedPayments),
+      (err) => console.error('[AdminDashboard] subscribeRentPayments error:', err),
+      workspaceId
+    );
+    const unsubExpenses = subscribeExpenses(
+      user.uid,
+      {},
+      (fetchedExpenses) => setExpenses(fetchedExpenses),
+      (err) => console.error('[AdminDashboard] subscribeExpenses error:', err),
+      workspaceId
     );
 
     return () => {
