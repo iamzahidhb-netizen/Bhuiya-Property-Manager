@@ -8,6 +8,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAppNavigation } from '../../contexts/NavigationContext';
 import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
+import { DriveFileUpload } from '../storage/DriveFileUpload';
 import {
   ReceiptText,
   ArrowLeft,
@@ -511,6 +512,16 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                   />
                 </div>
+              </div>
+
+              {/* Field 7: Google Drive Invoice / Bill Attachment */}
+              <div className="pt-1">
+                <DriveFileUpload
+                  category="expense_invoice"
+                  propertyId={propertyId || undefined}
+                  label={isBn ? '৭. বিল / ক্যাশ মেমো কপি (ঐচ্ছিক)' : '7. Invoice / Bill Memo Copy (Optional)'}
+                  description={isBn ? 'Google Drive ক্লাউড ব্যাকআপ' : 'Google Drive cloud vault'}
+                />
               </div>
 
               {/* Form Action Buttons: Cancel & Confirm (integrated inside card) */}

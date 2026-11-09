@@ -192,7 +192,7 @@ export function createPagesWorker(apiHandler, options = {}) {
             status: 204,
             headers: {
               ...corsHeaders,
-              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
               'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, x-workspace-id, X-Workspace-Id',
               'Access-Control-Max-Age': '86400',
               'X-Content-Type-Options': 'nosniff'
@@ -201,7 +201,40 @@ export function createPagesWorker(apiHandler, options = {}) {
         }
       }
 
-      // 2. Edge API Routes (/api/callable/*)
+      // 2. Storage Routes (/api/storage/*)
+      if (url.pathname.startsWith('/api/storage/')) {
+        if (typeof options.storageHandler === 'function') {
+          try {
+            const response = await options.storageHandler(request, env, ctx);
+            const responseHeaders = new Headers(response.headers);
+            
+            // Apply security and CORS headers
+            responseHeaders.set('X-Content-Type-Options', 'nosniff');
+            responseHeaders.set('X-Frame-Options', 'DENY');
+            responseHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+            for (const [k, v] of Object.entries(corsHeaders)) {
+              responseHeaders.set(k, v);
+            }
+
+            return new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: responseHeaders
+            });
+          } catch (storageErr) {
+            return errorResponse(
+              storageErr.code || 'STORAGE_ERROR',
+              storageErr.message || 'Storage handler error occurred',
+              storageErr.status || 500,
+              corsHeaders
+            );
+          }
+        } else {
+          return errorResponse('NOT_FOUND', 'Storage service not configured', 404, corsHeaders);
+        }
+      }
+
+      // 3. Edge API Routes (/api/callable/*)
       if (url.pathname.startsWith('/api/callable')) {
         // Enforce POST-only for API mutations
         if (request.method !== 'POST') {

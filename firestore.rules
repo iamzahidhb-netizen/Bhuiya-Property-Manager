@@ -146,5 +146,27 @@ service cloud.firestore {
       allow read: if isAuthorizedReader();
       allow write: if false;
     }
+
+    // =========================================================================
+    // 7. GOOGLE DRIVE CLOUD STORAGE & SYSTEM INTEGRATIONS
+    // =========================================================================
+
+    // File metadata records (read allowed for authorized workspace readers; writes only via backend API)
+    match /storageFiles/{fileId} {
+      allow read: if isAuthorizedReader();
+      allow write: if false;
+    }
+
+    // System integrations, credentials, and encrypted tokens (strictly backend only)
+    match /system_integrations/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Storage audit logs (strictly backend only)
+    match /storage_audit_logs/{logId} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }

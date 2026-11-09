@@ -7,6 +7,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAppNavigation } from '../../contexts/NavigationContext';
 import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
+import { DriveFileUpload } from '../storage/DriveFileUpload';
 import {
   CreditCard,
   ArrowLeft,
@@ -581,6 +582,16 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Field 6: Google Drive Payment Proof / Receipt Attachment */}
+              <div className="pt-1">
+                <DriveFileUpload
+                  category="payment_proof"
+                  tenantId={effectiveTenantId || undefined}
+                  label={isBn ? '৬. রসিদ / পেমেন্ট প্রুফ (ঐচ্ছিক)' : '6. Payment Proof / Receipt (Optional)'}
+                  description={isBn ? 'Google Drive ক্লাউড ব্যাকআপ' : 'Google Drive cloud vault'}
+                />
               </div>
 
               {/* Form Action Buttons: Cancel & Confirm (integrated inside card) */}

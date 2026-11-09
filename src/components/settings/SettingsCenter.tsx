@@ -28,6 +28,7 @@ import { UserPermissionSettings } from './UserPermissionSettings';
 import { SecurityPrivacySettings } from './SecurityPrivacySettings';
 import { DataBackupSettings } from './DataBackupSettings';
 import { AboutSupportSettings } from './AboutSupportSettings';
+import { StorageIntegrationsSettings } from './StorageIntegrationsSettings';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
@@ -123,6 +124,8 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
         return <SecurityPrivacySettings onBack={handleSubBack} />;
       case 'backup':
         return <DataBackupSettings onBack={handleSubBack} />;
+      case 'storage':
+        return <StorageIntegrationsSettings onBack={handleSubBack} />;
       case 'about':
         return <AboutSupportSettings onBack={handleSubBack} />;
       default:

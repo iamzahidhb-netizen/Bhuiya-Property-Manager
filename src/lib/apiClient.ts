@@ -39,6 +39,24 @@ export class ApiClientError extends Error {
  * @param payload The request body payload
  * @returns Promise<{ data: TRes }> Matching Firebase HttpsCallableResult shape
  */
+/**
+ * Dynamically resolves the API base URL.
+ * Automatically points to Cloudflare Pages staging/production when running inside Android Capacitor / WebView.
+ */
+export function resolveApiBase(): string {
+  const rawApiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+  if (rawApiBase) return rawApiBase.replace(/\/+$/, '');
+
+  if (typeof window !== 'undefined') {
+    const isCapacitor = window.location.protocol === 'capacitor:' ||
+      (window.location.hostname === 'localhost' && (!window.location.port || window.location.port === '80' || window.location.port === '443'));
+    if (isCapacitor) {
+      return 'https://iamzahid.pages.dev';
+    }
+  }
+  return '';
+}
+
 export async function callCallable<TReq = unknown, TRes = unknown>(
   actionName: string,
   payload?: TReq
@@ -49,8 +67,7 @@ export async function callCallable<TReq = unknown, TRes = unknown>(
   }
 
   const idToken = await user.getIdToken();
-  const rawApiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
-  const apiBase = rawApiBase ? rawApiBase.replace(/\/+$/, '') : '';
+  const apiBase = resolveApiBase();
   const url = `${apiBase}/api/callable/${actionName}`;
 
   const headers: Record<string, string> = {

@@ -16,6 +16,7 @@ import { createPagesWorker, jsonResponse, errorResponse } from '../workerRouter.
 import { verifyFirebaseIdToken } from '../tokenVerifier.mjs';
 import { authorizeWorkspaceRequest, sanitizeClientPayload } from '../workspaceAuth.mjs';
 import { dispatchAction } from './actionRegistry.mjs';
+import { handleStorageRequest } from './storageRouter.mjs';
 import { FirestoreRestClient } from '../firestoreRestClient.mjs';
 import { getFirestoreAccessToken } from '../serviceAccountAuth.mjs';
 
@@ -224,7 +225,71 @@ export async function handleCallableApiRequest(request, actionName, env, ctx) {
 }
 
 /**
+ * Storage API Request Dispatcher
+ */
+export async function dispatchStorageRequest(request, env, ctx) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  const config = getWorkerConfig(env);
+  const firestore = getOrCreateFirestoreClient(env, config);
+
+  // 1. Google OAuth Callback (unauthenticated redirect from accounts.google.com)
+  if (pathname === '/api/storage/drive/callback') {
+    const workerContext = {
+      env,
+      ctx,
+      config,
+      firestore,
+      verifiedUser: null,
+      authContext: null
+    };
+    return await handleStorageRequest(request, pathname, env, ctx, workerContext);
+  }
+
+  // 2. All remaining storage endpoints require Firebase ID Token verification
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return errorResponse('UNAUTHENTICATED', 'Missing or malformed Authorization header for storage request', 401);
+  }
+
+  let verifiedUser;
+  try {
+    const mockJwks = env.__MOCK_JWKS__ || null;
+    verifiedUser = await verifyFirebaseIdToken(token, config.projectId, { mockJwks });
+  } catch (tokenErr) {
+    return errorResponse('UNAUTHENTICATED', `Token verification failed: ${tokenErr.message}`, 401);
+  }
+
+  // 3. Resolve Workspace & Role Membership
+  const requestedWorkspaceId = request.headers.get('x-workspace-id') || 'workspace-bhuiya';
+  const member = await lookupWorkspaceMember(verifiedUser.uid, requestedWorkspaceId, env, config);
+  const role = member?.role || 'viewer';
+  const isMasterAdmin = role === 'admin' || role === 'owner' || member?.permissions?.manageAppSettings === true || member?.permissions?.manageWorkspaceMembers === true;
+
+  const authContext = {
+    callerUid: verifiedUser.uid,
+    role,
+    isMasterAdmin,
+    permissions: member?.permissions || {}
+  };
+
+  const workerContext = {
+    env,
+    ctx,
+    config,
+    firestore,
+    verifiedUser,
+    authContext
+  };
+
+  return await handleStorageRequest(request, pathname, env, ctx, workerContext);
+}
+
+/**
  * Cloudflare Pages Advanced Mode Worker Export
  */
-export const workerInstance = createPagesWorker(handleCallableApiRequest);
+export const workerInstance = createPagesWorker(handleCallableApiRequest, {
+  storageHandler: dispatchStorageRequest
+});
 export default workerInstance;

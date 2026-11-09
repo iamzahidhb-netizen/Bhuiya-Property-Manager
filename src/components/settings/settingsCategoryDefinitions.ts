@@ -10,6 +10,7 @@ import {
   Users,
   ShieldCheck,
   HardDrive,
+  Cloud,
   Info,
   Boxes,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ export type SettingsCategoryId =
   | 'users'
   | 'security'
   | 'backup'
+  | 'storage'
   | 'about';
 
 export interface SettingsCategoryDef {
@@ -186,6 +188,17 @@ export const SETTINGS_CATEGORIES: SettingsCategoryDef[] = [
     adminOnly: true,
   },
   {
+    id: 'storage',
+    titleBn: 'Google Drive ও ক্লাউড স্টোরেজ',
+    titleEn: 'Storage & Integrations',
+    subtitleBn: 'Google Drive ব্যাকএন্ড সিঙ্ক ও প্রাইভেট ভল্ট',
+    subtitleEn: 'Google Drive private vault & cloud integration',
+    icon: Cloud,
+    iconBg: 'bg-[var(--hyper-blue-bg)]',
+    iconColor: 'text-[#1685E8]',
+    adminOnly: true,
+  },
+  {
     id: 'about',
     titleBn: 'About & Support',
     titleEn: 'About & Support',
@@ -220,6 +233,6 @@ export const SETTINGS_GROUPS: SettingsGroupDef[] = [
     id: 'preferences',
     titleBn: 'পছন্দ ও নিয়ন্ত্রণ',
     titleEn: 'PREFERENCES & CONTROL',
-    categoryIds: ['notifications', 'users', 'security', 'backup', 'about'],
+    categoryIds: ['notifications', 'users', 'security', 'backup', 'storage', 'about'],
   },
 ];
