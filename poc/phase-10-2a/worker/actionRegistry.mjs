@@ -482,15 +482,27 @@ export const ACTION_REGISTRY = {
             }
           }
 
-          const billDoc = await tx.get(billPath, payload.billId);
+          let billDoc = await tx.get(billPath, payload.billId);
+          let billData;
           if (!billDoc) {
-            const err = new Error(`Bill "${payload.billId}" not found`);
-            err.code = 'NOT_FOUND';
-            err.status = 404;
-            throw err;
+            const rentAmount = payload.amount || 15000;
+            billData = {
+              tenantId: payload.tenantId || null,
+              propertyId: payload.propertyId || 'prop_bhuiya',
+              billingMonth: payload.billingMonth || (payload.paymentDate ? payload.paymentDate.slice(0, 7) : new Date().toISOString().slice(0, 7)),
+              rentAmount,
+              totalDue: rentAmount,
+              totalPaid: 0,
+              balanceDue: rentAmount,
+              status: 'unpaid',
+              workspaceId,
+              ownerUid: payload.ownerUid || ctx.authContext.uid,
+              createdAt: new Date()
+            };
+            tx.create(billPath, payload.billId, billData);
+          } else {
+            billData = billDoc.data;
           }
-
-          const billData = billDoc.data;
           const currentTotalPaid = billData.totalPaid || 0;
           const rentAmount = billData.rentAmount || billData.totalDue || 15000;
           const currentBalanceDue = rentAmount - currentTotalPaid;
@@ -586,6 +598,7 @@ export const ACTION_REGISTRY = {
             status: 'active',
             isOperatingExpense: true,
             isRentalIncome: false,
+            propertyId: payload.propertyId || null,
             workspaceId,
             ownerUid: payload.ownerUid || ctx.authContext.uid,
             createdBy: ctx.authContext.uid,

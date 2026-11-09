@@ -108,7 +108,7 @@ export function getWorkerConfig(env = {}) {
     credentials,
     credentialsError,
     allowedOrigins,
-    disableFinancialWrites: env.DISABLE_FINANCIAL_WRITES !== 'false',
+    disableFinancialWrites: env.DISABLE_FINANCIAL_WRITES === 'true',
     executionMode,
     apiKey: env.FIREBASE_WEB_API_KEY || env.VITE_FIREBASE_API_KEY || null
   };
