@@ -193,7 +193,7 @@ export function createPagesWorker(apiHandler, options = {}) {
             headers: {
               ...corsHeaders,
               'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-              'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, x-workspace-id, X-Workspace-Id',
+              'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Authorization, Content-Type, Accept, Origin, X-Requested-With, x-requested-with, x-workspace-id, X-Workspace-Id',
               'Access-Control-Max-Age': '86400',
               'X-Content-Type-Options': 'nosniff'
             }

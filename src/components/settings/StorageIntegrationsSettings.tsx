@@ -24,6 +24,7 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { HyperCard, PillButton } from '../ui/hyperos';
+import { Capacitor } from '@capacitor/core';
 
 export interface StorageIntegrationsSettingsProps {
   onBack?: () => void;
@@ -143,7 +144,18 @@ export const StorageIntegrationsSettings: React.FC<StorageIntegrationsSettingsPr
     setMessage(null);
     try {
       const authUrl = await connectDrive();
-      window.location.href = authUrl;
+      if (Capacitor.isNativePlatform()) {
+        window.open(authUrl, '_system');
+        setMessage({
+          type: 'info',
+          text: isBn
+            ? 'গুগল ড্রাইভ অনুমোদনের জন্য ব্রাউজার খোলা হয়েছে। ব্রাউজারে অনুমতি প্রদান সম্পন্ন হলে অ্যাপে ফিরে রিলোড করুন।'
+            : 'Browser opened for Google Drive authorization. Complete consent and reload in app.'
+        });
+        setActionLoading(false);
+      } else {
+        window.location.href = authUrl;
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('পাওয়া যায়নি') || msg.includes('not configured')) {
