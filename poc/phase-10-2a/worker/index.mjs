@@ -262,10 +262,19 @@ export async function dispatchStorageRequest(request, env, ctx) {
   }
 
   // 3. Resolve Workspace & Role Membership
-  const requestedWorkspaceId = request.headers.get('x-workspace-id') || 'workspace-bhuiya';
-  const member = await lookupWorkspaceMember(verifiedUser.uid, requestedWorkspaceId, env, config);
+  const rawWsId = request.headers.get('x-workspace-id');
+  const candidateWorkspaces = [rawWsId, 'workspace_bhuiya_family'].filter(Boolean);
+
+  let member = null;
+  for (const wsId of candidateWorkspaces) {
+    member = await lookupWorkspaceMember(verifiedUser.uid, wsId, env, config);
+    if (member) break;
+  }
+
   const role = member?.role || 'viewer';
-  const isMasterAdmin = role === 'admin' || role === 'owner' || member?.permissions?.manageAppSettings === true || member?.permissions?.manageWorkspaceMembers === true;
+  const isMasterAdmin = role === 'master_admin' || role === 'admin' || role === 'owner' ||
+                        member?.permissions?.manageAppSettings === true ||
+                        member?.permissions?.manageWorkspaceMembers === true;
 
   const authContext = {
     callerUid: verifiedUser.uid,

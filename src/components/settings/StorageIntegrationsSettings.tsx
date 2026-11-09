@@ -5,6 +5,7 @@ import {
   XCircle,
   RefreshCw,
   ExternalLink,
+  Key,
   ShieldCheck,
   FolderTree,
   Folder,
@@ -17,6 +18,7 @@ import {
   connectDrive,
   disconnectDrive,
   testDriveConnection,
+  configureDriveCredentials,
   type DriveStatus
 } from '../../services/storageService';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -36,6 +38,10 @@ export const StorageIntegrationsSettings: React.FC<StorageIntegrationsSettingsPr
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [showCredForm, setShowCredForm] = useState<boolean>(false);
+  const [clientIdInput, setClientIdInput] = useState<string>('');
+  const [clientSecretInput, setClientSecretInput] = useState<string>('');
+  const [savingCreds, setSavingCreds] = useState<boolean>(false);
 
   // Check URL query parameters for storage connection result
   useEffect(() => {
@@ -76,11 +82,59 @@ export const StorageIntegrationsSettings: React.FC<StorageIntegrationsSettingsPr
     }
   };
 
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientIdInput.trim() || !clientSecretInput.trim()) {
+      setMessage({
+        type: 'error',
+        text: isBn ? 'Client ID এবং Client Secret প্রদান করুন।' : 'Client ID and Client Secret are required.'
+      });
+      return;
+    }
+
+    setSavingCreds(true);
+    setMessage(null);
+    try {
+      await configureDriveCredentials({
+        clientId: clientIdInput.trim(),
+        clientSecret: clientSecretInput.trim()
+      });
+      setMessage({
+        type: 'success',
+        text: isBn
+          ? 'Google Cloud ক্রেডেনশিয়াল সফলভাবে সংরক্ষণ হয়েছে! এখন নিচের বাটনে ক্লিক করে Google Drive সংযুক্ত করুন।'
+          : 'Google Cloud credentials saved! Now click Connect Google Drive.'
+      });
+      setShowCredForm(false);
+      setClientSecretInput('');
+      await loadStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage({
+        type: 'error',
+        text: isBn ? `সংরক্ষণ ব্যর্থ: ${msg}` : `Failed to save credentials: ${msg}`
+      });
+    } finally {
+      setSavingCreds(false);
+    }
+  };
+
   const handleConnect = async () => {
     if (!isMasterAdmin) {
       setMessage({
         type: 'error',
         text: isBn ? 'শুধুমাত্র মাস্টার অ্যাডমিন গুগল ড্রাইভ সংযুক্ত করতে পারেন।' : 'Only Master Admin can connect Google Drive.'
+      });
+      return;
+    }
+
+    if (!status?.hasConfig && !showCredForm) {
+      setShowCredForm(true);
+      setMessage({
+        type: 'info',
+        text: isBn
+          ? 'অনুগ্রহ করে প্রথমে নিচে Google Cloud Console থেকে প্রাপ্ত Client ID এবং Client Secret প্রদান করুন।'
+          : 'Please provide your Google Cloud Client ID and Secret below first.'
       });
       return;
     }
@@ -92,6 +146,9 @@ export const StorageIntegrationsSettings: React.FC<StorageIntegrationsSettingsPr
       window.location.href = authUrl;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('পাওয়া যায়নি') || msg.includes('not configured')) {
+        setShowCredForm(true);
+      }
       setMessage({
         type: 'error',
         text: isBn ? `গুগল অনুমোদন শুরু করা যায়নি: ${msg}` : `Failed to start Google OAuth: ${msg}`
@@ -294,6 +351,80 @@ export const StorageIntegrationsSettings: React.FC<StorageIntegrationsSettingsPr
             )}
           </div>
         </div>
+
+        {/* Credentials Configuration Form */}
+        {showCredForm && (
+          <form onSubmit={handleSaveCredentials} className="pt-4 border-t border-[var(--hyper-border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--hyper-text-primary)] flex items-center gap-1.5">
+                <Key className="w-4 h-4 text-[#F28A24]" />
+                {isBn ? 'Google Cloud OAuth ক্রেডেনশিয়াল সেটআপ' : 'Google Cloud OAuth Credentials Setup'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCredForm(false)}
+                className="text-[11px] text-[var(--hyper-text-tertiary)] hover:text-[var(--hyper-text-primary)]"
+              >
+                {isBn ? 'লুকান' : 'Hide'}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-[var(--hyper-text-secondary)]">
+              {isBn
+                ? 'Google Cloud Console থেকে তৈরি করা Web Application Client ID এবং Client Secret এখানে পেস্ট করুন।'
+                : 'Paste the Web Application Client ID and Client Secret created in Google Cloud Console.'}
+            </p>
+
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--hyper-text-primary)] mb-1">
+                  Google Client ID
+                </label>
+                <input
+                  type="text"
+                  value={clientIdInput}
+                  onChange={(e) => setClientIdInput(e.target.value)}
+                  placeholder="xxxxx.apps.googleusercontent.com"
+                  className="w-full h-9 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs font-mono text-[var(--hyper-text-primary)] focus:border-[#1685E8] outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--hyper-text-primary)] mb-1">
+                  Google Client Secret
+                </label>
+                <input
+                  type="password"
+                  value={clientSecretInput}
+                  onChange={(e) => setClientSecretInput(e.target.value)}
+                  placeholder="GOCSPX-xxxxxxxxxxxxxxxx"
+                  className="w-full h-9 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs font-mono text-[var(--hyper-text-primary)] focus:border-[#1685E8] outline-none"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <PillButton
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setShowCredForm(false)}
+              >
+                {isBn ? 'বাতিল' : 'Cancel'}
+              </PillButton>
+              <PillButton
+                type="submit"
+                size="sm"
+                variant="primary"
+                disabled={savingCreds}
+              >
+                {savingCreds ? (isBn ? 'সংরক্ষণ হচ্ছে...' : 'Saving...') : (isBn ? 'ক্রেডেনশিয়াল সেভ করুন' : 'Save Credentials')}
+              </PillButton>
+            </div>
+          </form>
+        )}
 
         {/* Connection Metadata Grid */}
         {isConnected && (

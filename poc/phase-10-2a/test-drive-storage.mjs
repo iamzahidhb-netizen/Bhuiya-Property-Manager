@@ -372,7 +372,55 @@ async function runTests() {
 
   console.log('    ✓ RBAC authorization controls passed');
 
-  console.log('\n>>> [TEST SUCCESS] All 8 Google Drive Storage invariants passed flawlessly!\n');
+  // --------------------------------------------------------------------------
+  // TEST 9: Master Admin Specific Role & Configure Endpoint
+  // --------------------------------------------------------------------------
+  console.log('  [9/9] Testing master_admin role recognition & configure endpoint...');
+  
+  // Viewer should be forbidden from configure
+  const configReqViewer = new Request('https://iamzahid.pages.dev/api/storage/drive/configure', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${viewerToken}`,
+      'Content-Type': 'application/json',
+      'Origin': 'https://iamzahid.pages.dev'
+    },
+    body: JSON.stringify({ clientId: 'custom-client-id', clientSecret: 'custom-secret' })
+  });
+  const configResViewer = await workerInstance.fetch(configReqViewer, testEnv, {});
+  assert.equal(configResViewer.status, 403, 'Viewer must not be permitted to configure Drive credentials');
+
+  // Test with user having explicit 'master_admin' role
+  const masterAdminUid = 'master-admin-uid-123';
+  const masterAdminPayload = {
+    iss: 'https://securetoken.google.com/bhuiya-property-staging',
+    aud: 'bhuiya-property-staging',
+    auth_time: now - 60,
+    user_id: masterAdminUid,
+    sub: masterAdminUid,
+    iat: now - 60,
+    exp: now + 3600
+  };
+  const masterAdminToken = await signJwt(jwtHeader, masterAdminPayload, keyPair.privateKey);
+  testEnv.__MOCK_WORKSPACE_MEMBERS__[masterAdminUid] = {
+    uid: masterAdminUid,
+    role: 'master_admin',
+    status: 'active',
+    workspaceId: 'workspace_bhuiya_family'
+  };
+
+  const connectReqMaster = new Request('https://iamzahid.pages.dev/api/storage/drive/connect', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${masterAdminToken}`,
+      'Origin': 'https://iamzahid.pages.dev'
+    }
+  });
+  const connectResMaster = await workerInstance.fetch(connectReqMaster, testEnv, {});
+  assert.equal(connectResMaster.status, 200, 'master_admin must be authorized to initiate Drive connection');
+  console.log('    ✓ master_admin role recognized and configure endpoint RBAC enforced');
+
+  console.log('\n>>> [TEST SUCCESS] All 9 Google Drive Storage invariants passed flawlessly!\n');
 }
 
 runTests().catch(err => {

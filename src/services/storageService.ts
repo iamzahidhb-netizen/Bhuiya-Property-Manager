@@ -50,6 +50,8 @@ export interface DriveStatus {
   status: 'connected' | 'disconnected' | 'revoked' | 'unconfigured';
   rootFolderId?: string;
   folderCount?: number;
+  hasConfig?: boolean;
+  clientId?: string;
 }
 
 export interface UploadFileOptions {
@@ -73,10 +75,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     'Authorization': `Bearer ${token}`
   };
 
-  const wsId = getActiveWorkspaceId();
-  if (wsId) {
-    headers['x-workspace-id'] = wsId;
-  }
+  const wsId = getActiveWorkspaceId() || 'workspace_bhuiya_family';
+  headers['x-workspace-id'] = wsId;
 
   return headers;
 }
@@ -105,6 +105,31 @@ export async function getDriveStatus(): Promise<DriveStatus> {
  * Initiates the Google OAuth 2.0 Web Server Authorization Code flow.
  * Returns the Google consent URL or redirects directly.
  */
+/**
+ * Configures Google Cloud OAuth Client ID & Secret.
+ */
+export async function configureDriveCredentials(params: {
+  clientId: string;
+  clientSecret: string;
+}): Promise<{ success: boolean; message: string }> {
+  const base = resolveApiBase();
+  const headers = await getAuthHeaders();
+  headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(`${base}/api/storage/drive/configure`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params)
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `HTTP ${res.status} configuring Drive credentials`);
+  }
+
+  return data;
+}
+
 export async function connectDrive(): Promise<string> {
   const base = resolveApiBase();
   const headers = await getAuthHeaders();

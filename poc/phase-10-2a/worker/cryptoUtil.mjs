@@ -23,6 +23,13 @@ async function importAesKey(rawSecret) {
     if (/^[0-9a-fA-F]{64}$/.test(rawSecret)) {
       const match = rawSecret.match(/.{1,2}/g) || [];
       keyBytes = new Uint8Array(match.map(byte => parseInt(byte, 16)));
+    } else if (rawSecret.length === 44 && /^[A-Za-z0-9+/=]+$/.test(rawSecret)) {
+      try {
+        keyBytes = base64ToBuffer(rawSecret);
+      } catch (_) {
+        const encoder = new TextEncoder();
+        keyBytes = await subtle.digest('SHA-256', encoder.encode(rawSecret));
+      }
     } else {
       // Hash arbitrary string to 256 bits via SHA-256
       const encoder = new TextEncoder();
