@@ -179,9 +179,14 @@ export async function handleCallableApiRequest(request, actionName, env, ctx) {
   // 4. Server-Side Family Workspace Authorization & RBAC
   let authContext;
   try {
-    const requestedWorkspaceId = rawPayload.workspaceId || request.headers.get('x-workspace-id') || null;
+    const rawWsId = rawPayload.workspaceId || request.headers.get('x-workspace-id') || null;
+    const requestedWorkspaceId = rawWsId || 'workspace_bhuiya_family';
     const lookupFn = async (uid, wsId) => {
-      const res = await lookupWorkspaceMember(uid, wsId || requestedWorkspaceId, env, config);
+      const targetWsId = wsId || requestedWorkspaceId;
+      const res = await lookupWorkspaceMember(uid, targetWsId, env, config);
+      if (!res && targetWsId !== 'workspace_bhuiya_family') {
+        return await lookupWorkspaceMember(uid, 'workspace_bhuiya_family', env, config);
+      }
       if (!res) lookupFn.lastError = lookupWorkspaceMember.lastError;
       return res;
     };

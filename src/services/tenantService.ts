@@ -22,15 +22,14 @@ const DEPOSITS_COLL = 'security_deposits';
  * Real-time subscription to tenants.
  */
 export function subscribeTenants(
-  ownerUid: string,
+  _ownerUid: string,
   propertyId: string | null,
   onUpdate: (tenants: Tenant[]) => void,
   onError?: (error: Error) => void,
   workspaceId?: string | null
 ): Unsubscribe {
-  const constraints = workspaceId
-    ? [where('workspaceId', '==', workspaceId)]
-    : [where('ownerUid', '==', ownerUid)];
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   if (propertyId) {
     constraints.push(where('propertyId', '==', propertyId));

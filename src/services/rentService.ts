@@ -33,12 +33,14 @@ export interface RentBillFilters {
  * Real-time subscription to rent bills.
  */
 export function subscribeRentBills(
-  ownerUid: string,
+  _ownerUid: string,
   filters: RentBillFilters,
   onUpdate: (bills: RentBill[]) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  workspaceId?: string | null
 ): Unsubscribe {
-  const constraints = [where('ownerUid', '==', ownerUid)];
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   if (filters.propertyId) {
     constraints.push(where('propertyId', '==', filters.propertyId));
@@ -93,12 +95,14 @@ export interface RentPaymentFilters {
  * Real-time subscription to rent payments.
  */
 export function subscribeRentPayments(
-  ownerUid: string,
+  _ownerUid: string,
   filters: RentPaymentFilters,
   onUpdate: (payments: RentPayment[]) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  workspaceId?: string | null
 ): Unsubscribe {
-  const constraints = [where('ownerUid', '==', ownerUid)];
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   if (filters.billId) {
     constraints.push(where('billId', '==', filters.billId));

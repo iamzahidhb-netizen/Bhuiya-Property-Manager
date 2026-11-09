@@ -75,19 +75,17 @@ export async function callCallable<TReq = unknown, TRes = unknown>(
     'Authorization': `Bearer ${idToken}`,
   };
 
-  if (activeWorkspaceId) {
-    headers['x-workspace-id'] = activeWorkspaceId;
-  }
+  const wsId = activeWorkspaceId || 'workspace_bhuiya_family';
+  headers['x-workspace-id'] = wsId;
 
   // Ensure workspaceId is attached to request body if available
   let bodyPayload: unknown = payload ?? {};
   if (
-    activeWorkspaceId &&
     typeof bodyPayload === 'object' &&
     bodyPayload !== null &&
     !('workspaceId' in (bodyPayload as Record<string, unknown>))
   ) {
-    bodyPayload = { ...(bodyPayload as Record<string, unknown>), workspaceId: activeWorkspaceId };
+    bodyPayload = { ...(bodyPayload as Record<string, unknown>), workspaceId: wsId };
   }
 
   let response: Response;

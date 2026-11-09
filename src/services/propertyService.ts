@@ -33,14 +33,13 @@ export function normalizeUnitNumber(unitNumber: string): string {
  * Real-time subscription to properties belonging to an owner or workspace.
  */
 export function subscribeProperties(
-  ownerUid: string,
+  _ownerUid: string,
   onUpdate: (properties: Property[]) => void,
   onError?: (error: Error) => void,
   workspaceId?: string | null
 ): Unsubscribe {
-  const constraints = workspaceId
-    ? [where('workspaceId', '==', workspaceId)]
-    : [where('ownerUid', '==', ownerUid)];
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   const q = query(
     collection(db, PROPERTIES_COLL),
@@ -70,10 +69,9 @@ export function subscribeProperties(
 /**
  * Fetch all properties for an owner or workspace one-time.
  */
-export async function getProperties(ownerUid: string, workspaceId?: string | null): Promise<Property[]> {
-  const constraints = workspaceId
-    ? [where('workspaceId', '==', workspaceId)]
-    : [where('ownerUid', '==', ownerUid)];
+export async function getProperties(_ownerUid: string, workspaceId?: string | null): Promise<Property[]> {
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   const q = query(
     collection(db, PROPERTIES_COLL),

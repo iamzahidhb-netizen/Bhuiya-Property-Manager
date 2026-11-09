@@ -61,12 +61,14 @@ export interface ExpenseFilters {
  * Real-time subscription to expenses.
  */
 export function subscribeExpenses(
-  ownerUid: string,
+  _ownerUid: string,
   filters: ExpenseFilters,
   onUpdate: (expenses: Expense[]) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  workspaceId?: string | null
 ): Unsubscribe {
-  const constraints = [where('ownerUid', '==', ownerUid)];
+  const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+  const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   if (filters.group && filters.group !== 'all') {
     constraints.push(where('group', '==', filters.group));
