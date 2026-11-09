@@ -8,8 +8,11 @@
 :root {
   /* Surface & Canvas (Light) */
   --hyper-bg-canvas: #F2F3F5;
+  --hyper-bg-base: var(--hyper-bg-canvas);
   --hyper-bg-card: rgba(255, 255, 255, 0.86);
+  --hyper-surface: var(--hyper-bg-card);
   --hyper-bg-card-subtle: rgba(255, 255, 255, 0.65);
+  --hyper-surface-subtle: var(--hyper-bg-card-subtle);
   --hyper-bg-card-hover: rgba(255, 255, 255, 0.95);
   --hyper-bg-glass: rgba(255, 255, 255, 0.72);
   --hyper-bg-glass-strong: rgba(255, 255, 255, 0.86);
@@ -58,8 +61,11 @@
 .dark {
   /* Surface & Canvas (Dark) */
   --hyper-bg-canvas: #000000;
+  --hyper-bg-base: var(--hyper-bg-canvas);
   --hyper-bg-card: rgba(32, 32, 35, 0.88);
+  --hyper-surface: var(--hyper-bg-card);
   --hyper-bg-card-subtle: rgba(42, 42, 45, 0.70);
+  --hyper-surface-subtle: var(--hyper-bg-card-subtle);
   --hyper-bg-card-hover: rgba(48, 48, 52, 0.95);
   --hyper-bg-glass: rgba(35, 35, 38, 0.78);
   --hyper-bg-glass-strong: rgba(45, 45, 48, 0.92);

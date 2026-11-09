@@ -242,6 +242,11 @@
   },
   "profile": {
     "title": "Profile & User Information",
+    "changePhoto": "Change Photo",
+    "uploadPhoto": "Upload Photo",
+    "removePhoto": "Remove Photo",
+    "photoUpdated": "Profile photo updated successfully!",
+    "photoRemoved": "Profile photo removed!",
     "role": "Role:",
     "email": "Email:",
     "uid": "UID:",

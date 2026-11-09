@@ -1,9 +1,67 @@
 import React, { useState } from 'react';
-import { Languages, Check, RefreshCw } from 'lucide-react';
+import { Languages, RefreshCw, Calendar, Globe } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos/FrostedGlassSelect';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+
+const LANGUAGE_OPTIONS: FrostedGlassOption<'bn' | 'en'>[] = [
+  {
+    value: 'bn',
+    labelBn: 'বাংলা',
+    labelEn: 'Bangla (Bengali)',
+    descriptionBn: 'সম্পূর্ণ ইন্টারফেস বাংলায় প্রদর্শন করুন',
+    descriptionEn: 'Display entire interface in Bengali',
+    icon: Globe,
+    iconBg: 'bg-emerald-500/15',
+    iconColor: 'text-[#22B84A]',
+    badge: 'ডিফল্ট',
+  },
+  {
+    value: 'en',
+    labelBn: 'English',
+    labelEn: 'English (US/UK)',
+    descriptionBn: 'ইংরেজি ভাষায় অ্যাপ পরিচালনা করুন',
+    descriptionEn: 'Switch interface language to English',
+    icon: Globe,
+    iconBg: 'bg-blue-500/15',
+    iconColor: 'text-[#1685E8]',
+  },
+];
+
+const DATE_FORMAT_OPTIONS: FrostedGlassOption<'DD/MM/YYYY' | 'DD MMM YYYY' | 'YYYY-MM-DD'>[] = [
+  {
+    value: 'DD/MM/YYYY',
+    labelBn: 'DD/MM/YYYY (০৯/১১/২০২৬)',
+    labelEn: 'DD/MM/YYYY (09/11/2026)',
+    descriptionBn: 'দিন/মাস/বছর ব্রিটিশ ফরম্যাট (বাংলাদেশ স্ট্যান্ডার্ড)',
+    descriptionEn: 'Day/Month/Year British format (BD standard)',
+    icon: Calendar,
+    iconBg: 'bg-emerald-500/15',
+    iconColor: 'text-[#22B84A]',
+  },
+  {
+    value: 'DD MMM YYYY',
+    labelBn: 'DD MMM YYYY (০৯ নভে ২০২৬)',
+    labelEn: 'DD MMM YYYY (09 Nov 2026)',
+    descriptionBn: 'সংক্ষিপ্ত মাসের নামসহ সহজবোধ্য ফরম্যাট',
+    descriptionEn: 'Formatted with abbreviated month name',
+    icon: Calendar,
+    iconBg: 'bg-blue-500/15',
+    iconColor: 'text-[#1685E8]',
+  },
+  {
+    value: 'YYYY-MM-DD',
+    labelBn: 'YYYY-MM-DD (২০২৬-১১-০৯)',
+    labelEn: 'YYYY-MM-DD (2026-11-09)',
+    descriptionBn: 'আন্তর্জাতিক স্ট্যান্ডার্ড (ISO 8601)',
+    descriptionEn: 'International ISO standard format',
+    icon: Calendar,
+    iconBg: 'bg-purple-500/15',
+    iconColor: 'text-[#7655E8]',
+  },
+];
 
 export const LanguageRegionSettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { settings, updateSettings } = useSettings();
@@ -68,38 +126,26 @@ export const LanguageRegionSettings: React.FC<{ onBack: () => void }> = ({ onBac
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setLocalLang('bn')}
-            className={`p-3.5 rounded-[20px] border text-left transition-all duration-150 flex items-center justify-between cursor-pointer ${
-              lang === 'bn'
-                ? 'bg-emerald-500/10 border-[#22B84A] text-[var(--hyper-text-primary)] font-bold shadow-xs'
-                : 'bg-black/5 dark:bg-white/5 border-transparent text-[var(--hyper-text-secondary)]'
-            }`}
-          >
-            <div>
-              <div className="text-sm font-bold">বাংলা</div>
-              <div className="text-[11px] text-[var(--hyper-text-secondary)]">Bangla</div>
-            </div>
-            {lang === 'bn' && <Check className="w-5 h-5 text-[#22B84A]" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setLocalLang('en')}
-            className={`p-3.5 rounded-[20px] border text-left transition-all duration-150 flex items-center justify-between cursor-pointer ${
-              lang === 'en'
-                ? 'bg-emerald-500/10 border-[#22B84A] text-[var(--hyper-text-primary)] font-bold shadow-xs'
-                : 'bg-black/5 dark:bg-white/5 border-transparent text-[var(--hyper-text-secondary)]'
-            }`}
-          >
-            <div>
-              <div className="text-sm font-bold">English</div>
-              <div className="text-[11px] text-[var(--hyper-text-secondary)]">ইংরেজি</div>
-            </div>
-            {lang === 'en' && <Check className="w-5 h-5 text-[#22B84A]" />}
-          </button>
+        {/* Frosted Glass Language Selector */}
+        <div>
+          <label className="block text-xs font-semibold text-[var(--hyper-text-secondary)] mb-1.5">
+            {isBn ? 'ভাষা নির্বাচন করুন' : 'Select Interface Language'}
+          </label>
+          <FrostedGlassSelect<'bn' | 'en'>
+            id="app-language-select"
+            value={lang}
+            onChange={(newLang) => setLocalLang(newLang)}
+            options={LANGUAGE_OPTIONS}
+            titleBn="অ্যাপ্লিকেশন ভাষা"
+            titleEn="Application Language"
+            subtitleBn="সম্পূর্ণ ইন্টারফেস ভাষা পরিবর্তন করুন"
+            subtitleEn="Choose interface display language"
+            headerIcon={Globe}
+            headerIconBg="bg-[#1685E8]/15"
+            headerIconColor="text-[#1685E8]"
+            triggerTestId="language-frosted-trigger"
+            modalTestId="language-frosted-modal"
+          />
         </div>
       </HyperCard>
 
@@ -132,15 +178,21 @@ export const LanguageRegionSettings: React.FC<{ onBack: () => void }> = ({ onBac
           <label className="block text-xs font-semibold text-[var(--hyper-text-secondary)] mb-1.5">
             {isBn ? 'তারিখ প্রদর্শন ফরম্যাট' : 'Date Format'}
           </label>
-          <select
+          <FrostedGlassSelect<'DD/MM/YYYY' | 'DD MMM YYYY' | 'YYYY-MM-DD'>
+            id="app-date-format-select"
             value={dateFormat}
-            onChange={(e) => setDateFormat(e.target.value as 'DD/MM/YYYY' | 'DD MMM YYYY' | 'YYYY-MM-DD')}
-            className="w-full px-3.5 py-2.5 rounded-[18px] hyper-input-field text-xs sm:text-sm font-medium"
-          >
-            <option value="DD/MM/YYYY">DD/MM/YYYY (যেমন: 09/11/2026)</option>
-            <option value="DD MMM YYYY">DD MMM YYYY (যেমন: 09 Nov 2026)</option>
-            <option value="YYYY-MM-DD">YYYY-MM-DD (ISO 8601: 2026-11-09)</option>
-          </select>
+            onChange={(newFormat) => setDateFormat(newFormat)}
+            options={DATE_FORMAT_OPTIONS}
+            titleBn="তারিখ প্রদর্শন ফরম্যাট"
+            titleEn="Date Display Format"
+            subtitleBn="অ্যাপের সর্বস্তরে তারিখ প্রদর্শনের বিন্যাস বাছাই করুন"
+            subtitleEn="Choose how dates appear throughout the application"
+            headerIcon={Calendar}
+            headerIconBg="bg-[#22B84A]/15"
+            headerIconColor="text-[#22B84A]"
+            triggerTestId="date-format-frosted-trigger"
+            modalTestId="date-format-frosted-modal"
+          />
         </div>
 
         {/* Time Format */}

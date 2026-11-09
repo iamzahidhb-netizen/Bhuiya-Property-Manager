@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   UserRound,
   Building,
   LogOut,
   CheckCircle2,
+  Camera,
+  Check,
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
@@ -11,15 +13,50 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getUserDisplayName } from '../../utils/dhakaDate';
+import { processProfileImage } from '../../utils/imageUtils';
+import { ProfilePhotoModal } from '../profile/ProfilePhotoModal';
 
 export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, photoURL, updatePhotoURL } = useAuth();
   const { workspaceId, role, isMasterAdmin } = useWorkspace();
   const { currentLanguage } = useLanguage();
   const isBn = currentLanguage === 'bn';
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const displayName = getUserDisplayName(user?.displayName, user?.email);
+
+  // Photo management
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoToast, setPhotoToast] = useState<string | null>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await processProfileImage(file, 320, 0.88);
+      setPreviewPhoto(dataUrl);
+      setIsPhotoModalOpen(true);
+    } catch (err) {
+      console.error('Failed to process image:', err);
+      alert(isBn ? 'ছবি প্রক্রিয়া করতে সমস্যা হয়েছে।' : 'Failed to process image.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSavePhoto = async (photoDataUrl: string) => {
+    await updatePhotoURL(photoDataUrl);
+    setPhotoToast(isBn ? 'প্রোফাইল ছবি সফলভাবে আপডেট হয়েছে!' : 'Profile photo updated successfully!');
+    setTimeout(() => setPhotoToast(null), 3000);
+  };
+
+  const handleRemovePhoto = async () => {
+    await updatePhotoURL(null);
+    setPhotoToast(isBn ? 'প্রোফাইল ছবি সরানো হয়েছে!' : 'Profile photo removed!');
+    setTimeout(() => setPhotoToast(null), 3000);
+  };
 
   async function handleLogout() {
     if (window.confirm(isBn ? 'আপনি কি লগআউট করতে চান?' : 'Are you sure you want to sign out?')) {
@@ -51,10 +88,35 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
       </div>
 
       {/* User Hero Card */}
-      <HyperCard variant="default" className="p-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="w-14 h-14 rounded-[22px] bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-600/20 shrink-0">
-            <UserRound className="w-7 h-7 text-white" />
+      <HyperCard variant="default" className="p-4 sm:p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+          <div className="relative group shrink-0">
+            <div
+              onClick={() => {
+                if (photoURL) {
+                  setPreviewPhoto(null);
+                  setIsPhotoModalOpen(true);
+                } else {
+                  fileInputRef.current?.click();
+                }
+              }}
+              className="w-14 h-14 rounded-[22px] overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-600/20 border-2 border-white/80 dark:border-white/10 cursor-pointer active:scale-95 transition-transform"
+              title={isBn ? 'ছবি পরিবর্তন করুন' : 'Change Photo'}
+            >
+              {photoURL ? (
+                <img src={photoURL} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                <UserRound className="w-7 h-7 text-white" />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label={isBn ? 'ছবি পরিবর্তন করুন' : 'Change Photo'}
+              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-[#202023] transition-transform active:scale-90 cursor-pointer"
+            >
+              <Camera className="w-3 h-3" />
+            </button>
           </div>
           <div className="min-w-0">
             <h4 className="text-base font-bold text-[var(--hyper-text-primary)] truncate">
@@ -63,7 +125,7 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
             <p className="text-xs text-[var(--hyper-text-secondary)] truncate">
               {user?.email || 'admin@bhuiyan.com'}
             </p>
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                   isMasterAdmin
@@ -86,6 +148,14 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
             </div>
           </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
       </HyperCard>
 
       {/* Identity & Workspace Details */}
@@ -147,6 +217,30 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
           <span>{isBn ? 'লগআউট' : 'Sign Out'}</span>
         </PillButton>
       </div>
+
+      {/* Profile Photo Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => {
+          setIsPhotoModalOpen(false);
+          setPreviewPhoto(null);
+        }}
+        previewUrl={previewPhoto}
+        currentPhotoUrl={photoURL}
+        onSave={handleSavePhoto}
+        onRemove={handleRemovePhoto}
+        onPickAnother={() => fileInputRef.current?.click()}
+      />
+
+      {/* Floating Toast Notification */}
+      {photoToast && (
+        <div className="fixed top-5 inset-x-0 z-[10000] flex justify-center pointer-events-none px-4 animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="px-4 py-2 rounded-2xl bg-[#22B84A] text-white font-semibold text-xs shadow-lg flex items-center gap-2 pointer-events-auto">
+            <Check className="w-4 h-4" />
+            <span>{photoToast}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tenant } from '../../types/tenant';
 import type { RentBill, PaymentMethod } from '../../types/finance';
 import { recordRentPayment } from '../../services/rentService';
 import { formatLocalizedCurrency } from '../../utils/banglaFormat';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAppNavigation } from '../../contexts/NavigationContext';
+import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
 import {
   CreditCard,
   ArrowLeft,
@@ -14,7 +16,62 @@ import {
   RotateCcw,
   User,
   Phone,
+  Banknote,
+  Wallet,
 } from 'lucide-react';
+
+const PAYMENT_METHOD_OPTIONS: FrostedGlassOption<PaymentMethod>[] = [
+  {
+    value: 'cash',
+    labelBn: 'নগদ',
+    labelEn: 'Cash',
+    descriptionBn: 'সরাসরি নগদ অর্থ গ্রহণ',
+    descriptionEn: 'Direct physical cash payment',
+    icon: Banknote,
+    iconBg: 'bg-emerald-500/15',
+    iconColor: 'text-[#22B84A]',
+  },
+  {
+    value: 'bkash',
+    labelBn: 'বিকাশ (bKash)',
+    labelEn: 'bKash',
+    descriptionBn: 'মোবাইল ফিন্যান্সিয়াল সার্ভিস',
+    descriptionEn: 'bKash digital wallet transfer',
+    icon: Wallet,
+    iconBg: 'bg-pink-500/15',
+    iconColor: 'text-pink-600',
+  },
+  {
+    value: 'nagad',
+    labelBn: 'নগদ (Nagad)',
+    labelEn: 'Nagad',
+    descriptionBn: 'ডাক বিভাগীয় ডিজিটাল ওয়ালেট',
+    descriptionEn: 'Nagad digital wallet transfer',
+    icon: Wallet,
+    iconBg: 'bg-orange-500/15',
+    iconColor: 'text-orange-600',
+  },
+  {
+    value: 'bank',
+    labelBn: 'ব্যাংক ট্রান্সফার',
+    labelEn: 'Bank Transfer',
+    descriptionBn: 'ব্যাংক একাউন্ট অথবা চেক ডিপোজিট',
+    descriptionEn: 'Bank wire or deposited check',
+    icon: CreditCard,
+    iconBg: 'bg-blue-500/15',
+    iconColor: 'text-[#1685E8]',
+  },
+  {
+    value: 'other',
+    labelBn: 'অন্যান্য মাধ্যম',
+    labelEn: 'Other Method',
+    descriptionBn: 'অন্য যেকোনো পরিশোধ পদ্ধতি',
+    descriptionEn: 'Any other payment method',
+    icon: CreditCard,
+    iconBg: 'bg-slate-500/15',
+    iconColor: 'text-slate-600 dark:text-slate-400',
+  },
+];
 
 export interface RentDepositPageProps {
   tenants: Tenant[];
@@ -40,6 +97,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
 }) => {
   const { currentLanguage, t } = useLanguage();
   const { settings } = useSettings();
+  const { goBack, forceBack, registerBackGuard } = useAppNavigation();
   const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
   const isBn = currentLanguage === 'bn';
 
@@ -80,6 +138,19 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
       : currentBill.totalDue
     : currentTenant?.monthlyRent || 0;
 
+  const tenantOptions: FrostedGlassOption<string>[] = useMemo(() => {
+    return tenants.map((item) => ({
+      value: item.id,
+      labelBn: item.name,
+      labelEn: item.name,
+      descriptionBn: `মাসিক ভাড়া: ${formatLocalizedCurrency(item.monthlyRent, currentLanguage, useBanglaNumerals)}`,
+      descriptionEn: `Monthly Rent: ${formatLocalizedCurrency(item.monthlyRent, currentLanguage, useBanglaNumerals)}`,
+      icon: User,
+      iconBg: 'bg-emerald-500/15',
+      iconColor: 'text-[#22B84A]',
+    }));
+  }, [tenants, currentLanguage, useBanglaNumerals]);
+
   const displayAmount = customAmount !== null ? customAmount : defaultAmount;
 
   // Unsaved changes detection
@@ -90,11 +161,27 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
       (selectedTenantId !== '' &&
         selectedTenantId !== (preSelectedTenantId || (tenants[0]?.id ?? ''))));
 
+  const isDirtyRef = useRef(isDirty);
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  // Register unified browser back guard (protects Android hardware back & swipe gestures)
+  useEffect(() => {
+    return registerBackGuard({
+      id: 'rent-deposit-guard',
+      isDirty: () => isDirtyRef.current,
+      onBlocked: () => {
+        setShowDiscardConfirm(true);
+      },
+    });
+  }, [registerBackGuard]);
+
   const handleBackRequest = () => {
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
-      onBack();
+      goBack();
     }
   };
 
@@ -184,31 +271,31 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
 
   return (
     <div
-      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-28 sm:pb-32 ${className}`}
+      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] ${className}`}
       data-testid="rent-deposit-fullpage"
     >
       {/* ===================================================================== */}
       {/* Top Header: HyperOS Glass Bar with Back Navigation                    */}
       {/* ===================================================================== */}
-      <header className="sticky top-0 z-30 hyper-glass-nav border-b border-[var(--hyper-border-subtle)] px-4 py-3 sm:px-6">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 hyper-glass-nav border-b border-[var(--hyper-border-subtle)] px-3.5 sm:px-6 pt-[calc(env(safe-area-inset-top,0px)+0.6rem)] pb-2.5">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={handleBackRequest}
               aria-label={t('common.back') || 'Back'}
-              className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+              className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg shrink-0">
-              <CreditCard className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-base shrink-0">
+              <CreditCard className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
+              <h1 className="text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] leading-tight">
                 {isBn ? 'ভাড়া জমা (Payment Receipt)' : 'Rent Deposit (Payment Receipt)'}
               </h1>
-              <p className="text-[11px] text-[var(--hyper-text-secondary)]">
+              <p className="text-[10px] text-[var(--hyper-text-secondary)] leading-tight">
                 {isBn ? 'সহজ পারিবারিক ভাড়া আদায় খাতা' : 'Simple Family Rent Collection Register'}
               </p>
             </div>
@@ -217,7 +304,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
           <button
             type="button"
             onClick={handleBackRequest}
-            className="hidden sm:inline-flex px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+            className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
           >
             {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
           </button>
@@ -225,9 +312,9 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
       </header>
 
       {/* ===================================================================== */}
-      {/* Main Content Area: Responsive Form Container (Centered Max-W-2XL)    */}
+      {/* Main Content Area: Responsive Form Container (Centered Max-W-XL)     */}
       {/* ===================================================================== */}
-      <main className="max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex-1">
+      <main className="max-w-xl w-full mx-auto px-3 sm:px-5 py-3 sm:py-4 flex-1">
         {successInfo ? (
           /* ================================================================= */
           /* Full-Page Success & Receipt Card View                             */
@@ -306,7 +393,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
               </button>
               <button
                 type="button"
-                onClick={onBack}
+                onClick={onBack || goBack}
                 className="w-full sm:w-1/2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/25 transition cursor-pointer"
               >
                 {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
@@ -315,118 +402,147 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
           </div>
         ) : (
           /* ================================================================= */
-          /* Main Form Card                                                    */
+          /* Main Form Card (Compact HyperOS Styling)                          */
           /* ================================================================= */
-          <div className="bg-[var(--hyper-surface)] rounded-3xl p-5 sm:p-7 border border-[var(--hyper-border-subtle)] shadow-xs space-y-6">
+          <div className="bg-[var(--hyper-surface)] rounded-2xl p-3.5 sm:p-5 border border-[var(--hyper-border-subtle)] shadow-xs space-y-3">
             {error && (
-              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-300 text-xs sm:text-sm flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-300 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="flex-1 font-medium">{error}</div>
               </div>
             )}
 
-            <form id="rent-deposit-form" onSubmit={handleSubmit} className="space-y-5">
+            <form id="rent-deposit-form" onSubmit={handleSubmit} className="space-y-3">
               {/* Field 1: Tenant Selection */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label
                   htmlFor="rent-tenant-select"
-                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                  className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                 >
                   {isBn ? '১. ভাড়াটিয়া নির্বাচন করুন *' : '1. Select Tenant *'}
                 </label>
-                <div className="relative">
-                  <select
-                    id="rent-tenant-select"
-                    value={effectiveTenantId}
-                    onChange={(e) => {
-                      setSelectedTenantId(e.target.value);
-                      setCustomAmount(null);
-                    }}
-                    disabled={loading}
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition cursor-pointer"
-                  >
-                    {tenants.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} ({isBn ? 'মাসিক ভাড়া' : 'Rent'}:{' '}
-                        {formatLocalizedCurrency(item.monthlyRent, currentLanguage, useBanglaNumerals)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FrostedGlassSelect<string>
+                  id="rent-tenant-select"
+                  value={effectiveTenantId}
+                  onChange={(newTenantId) => {
+                    setSelectedTenantId(newTenantId);
+                    setCustomAmount(null);
+                  }}
+                  options={tenantOptions}
+                  titleBn="ভাড়াটিয়া নির্বাচন করুন"
+                  titleEn="Select Tenant"
+                  subtitleBn="ভাড়া জমার জন্য ভাড়াটিয়া বাছাই করুন"
+                  subtitleEn="Choose tenant to deposit rent for"
+                  headerIcon={User}
+                  headerIconBg="bg-emerald-500/15"
+                  headerIconColor="text-[#22B84A]"
+                  triggerTestId="rent-tenant-trigger"
+                  modalTestId="rent-tenant-modal"
+                  disabled={loading}
+                  compact={true}
+                />
               </div>
 
-              {/* Tenant Details Preview Banner */}
+              {/* Tenant Details Preview Banner (Compact Inline Pill) */}
               {currentTenant && (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-[var(--hyper-text-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4" />
+                <div className="py-2 px-3 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                      <User className="w-3.5 h-3.5" />
                     </div>
-                    <div>
-                      <div className="font-bold text-sm text-[var(--hyper-text-primary)]">
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs sm:text-sm text-[var(--hyper-text-primary)] truncate leading-tight">
                         {currentTenant.name}
                       </div>
-                      <div className="text-[11px] text-[var(--hyper-text-secondary)] flex items-center gap-1 mt-0.5">
-                        <Phone className="w-3 h-3" />
-                        <span>{currentTenant.mobile || (isBn ? 'মোবাইল দেয়া নেই' : 'No mobile')}</span>
+                      <div className="text-[10px] text-[var(--hyper-text-secondary)] flex items-center gap-1 leading-tight mt-0.5">
+                        <Phone className="w-2.5 h-2.5 shrink-0" />
+                        <span className="truncate">{currentTenant.mobile || (isBn ? 'মোবাইল নেই' : 'No mobile')}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="sm:text-right pt-2 sm:pt-0 border-t sm:border-t-0 border-emerald-500/20">
-                    <div className="text-[11px] text-[var(--hyper-text-secondary)]">
+                  <div className="text-right shrink-0 pl-2">
+                    <div className="text-[10px] text-[var(--hyper-text-secondary)] leading-tight">
                       {isBn ? 'মাসিক ভাড়া' : 'Monthly Rent'}
                     </div>
-                    <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                    <div className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 leading-tight">
                       {formatLocalizedCurrency(currentTenant.monthlyRent, currentLanguage, useBanglaNumerals)}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Field 2: Payment Amount */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="rent-amount-input"
-                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
-                >
-                  {isBn ? '২. জমা টাকার পরিমাণ (৳) *' : '2. Payment Amount (৳) *'}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--hyper-text-tertiary)] font-bold text-base select-none">
-                    ৳
-                  </span>
-                  <input
-                    id="rent-amount-input"
-                    type="number"
-                    min="1"
-                    value={displayAmount}
-                    onChange={(e) =>
-                      setCustomAmount(e.target.value ? Number(e.target.value) : '')
-                    }
+              {/* Field 2 & 3: Payment Amount & Payment Method in 2-Column Responsive Grid */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="rent-amount-input"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
+                  >
+                    {isBn ? '২. জমা টাকা (৳) *' : '2. Amount (৳) *'}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--hyper-text-tertiary)] font-bold text-sm select-none">
+                      ৳
+                    </span>
+                    <input
+                      id="rent-amount-input"
+                      type="number"
+                      min="1"
+                      value={displayAmount}
+                      onChange={(e) =>
+                        setCustomAmount(e.target.value ? Number(e.target.value) : '')
+                      }
+                      disabled={loading}
+                      placeholder="20000"
+                      className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-7 pr-2.5 text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500/30 outline-none transition"
+                    />
+                  </div>
+                  {currentBill && currentBill.balanceDue > 0 && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate">
+                      {isBn ? 'বকেয়া বিল অনুযায়ী:' : 'Due:'}{' '}
+                      <span className="font-bold">
+                        {formatLocalizedCurrency(currentBill.balanceDue, currentLanguage, useBanglaNumerals)}
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label
+                    htmlFor="rent-method-select"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
+                  >
+                    {isBn ? '৩. মাধ্যম *' : '3. Method *'}
+                  </label>
+                  <FrostedGlassSelect<PaymentMethod>
+                    id="rent-method-select"
+                    value={paymentMethod}
+                    onChange={(newMethod) => setPaymentMethod(newMethod)}
+                    options={PAYMENT_METHOD_OPTIONS}
+                    titleBn="পরিশোধের মাধ্যম"
+                    titleEn="Payment Method"
+                    subtitleBn="টাকা পরিশোধের পদ্ধতি বাছাই করুন"
+                    subtitleEn="Select payment method channel"
+                    headerIcon={CreditCard}
+                    headerIconBg="bg-emerald-500/15"
+                    headerIconColor="text-[#22B84A]"
+                    triggerTestId="rent-method-trigger"
+                    modalTestId="rent-method-modal"
                     disabled={loading}
-                    placeholder="20000"
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-9 pr-4 py-3 text-base font-bold text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                    compact={true}
                   />
                 </div>
-                {currentBill && currentBill.balanceDue > 0 && (
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                    {isBn ? 'বকেয়া বিল অনুযায়ী স্বয়ংক্রিয়ভাবে ধার্য:' : 'Defaulted to current due:'}{' '}
-                    <span className="font-bold">
-                      {formatLocalizedCurrency(currentBill.balanceDue, currentLanguage, useBanglaNumerals)}
-                    </span>
-                  </p>
-                )}
               </div>
 
-              {/* Field 3 & 4: Date and Method in 2-Column Responsive Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              {/* Field 4 & 5: Date and Notes in 2-Column Responsive Grid */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="space-y-1">
                   <label
                     htmlFor="rent-date-input"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
-                    {isBn ? '৩. পরিশোধের তারিখ *' : '3. Payment Date *'}
+                    {isBn ? '৪. পরিশোধের তারিখ *' : '4. Payment Date *'}
                   </label>
                   <div className="relative">
                     <input
@@ -435,99 +551,69 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
                       value={paymentDate}
                       onChange={(e) => setPaymentDate(e.target.value)}
                       disabled={loading}
-                      className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
+                      className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-2.5 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500/30 outline-none transition"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label
-                    htmlFor="rent-method-select"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    htmlFor="rent-notes-input"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
-                    {isBn ? '৪. পরিশোধের মাধ্যম *' : '4. Payment Method *'}
+                    {isBn
+                      ? '৫. নোট / রসিদ (ঐচ্ছিক)'
+                      : '5. Notes / Ref (Opt)'}
                   </label>
-                  <select
-                    id="rent-method-select"
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                    disabled={loading}
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition cursor-pointer"
-                  >
-                    <option value="cash">{isBn ? 'নগদ (Cash)' : 'Cash'}</option>
-                    <option value="bkash">{isBn ? 'বিকাশ (bKash)' : 'bKash'}</option>
-                    <option value="nagad">{isBn ? 'নগদ (Nagad)' : 'Nagad'}</option>
-                    <option value="bank">{isBn ? 'ব্যাংক (Bank Transfer)' : 'Bank Transfer'}</option>
-                    <option value="other">{isBn ? 'অন্যান্য (Other)' : 'Other'}</option>
-                  </select>
+                  <div className="relative">
+                    <input
+                      id="rent-notes-input"
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      disabled={loading}
+                      placeholder={
+                        isBn
+                          ? 'যেমন: ক্যাশ বা মেমো নম্বর'
+                          : 'e.g. Cash or memo #'
+                      }
+                      className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500/30 outline-none transition"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Field 5: Notes / Reference */}
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="rent-notes-input"
-                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+              {/* Form Action Buttons: Cancel & Confirm (integrated inside card) */}
+              <div className="flex items-center gap-2.5 pt-3 border-t border-[var(--hyper-border-subtle)]">
+                <button
+                  type="button"
+                  onClick={handleBackRequest}
+                  disabled={loading}
+                  className="w-1/3 h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-xs sm:text-sm transition cursor-pointer select-none"
                 >
-                  {isBn
-                    ? '৫. নোট বা রসিদ রেফারেন্স (ঐচ্ছিক)'
-                    : '5. Notes or Receipt Reference (Optional)'}
-                </label>
-                <div className="relative">
-                  <input
-                    id="rent-notes-input"
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    disabled={loading}
-                    placeholder={
-                      isBn
-                        ? 'যেমন: চেকের নম্বর, ব্যাংক স্লিপ বা ক্যাশ মেমো'
-                        : 'e.g. Check number or bank slip memo'
-                    }
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
-                  />
-                </div>
+                  {isBn ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-2/3 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs sm:text-sm shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
+                >
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
+                  <span>
+                    {loading
+                      ? isBn
+                        ? 'জমা হচ্ছে...'
+                        : 'Processing...'
+                      : isBn
+                      ? 'ভাড়া জমা নিশ্চিত করুন'
+                      : 'Confirm Rent Deposit'}
+                  </span>
+                </button>
               </div>
             </form>
           </div>
         )}
       </main>
-
-      {/* ===================================================================== */}
-      {/* Sticky Bottom Action Footer (Mobile & Desktop)                        */}
-      {/* ===================================================================== */}
-      {!successInfo && (
-        <footer className="fixed bottom-0 inset-x-0 z-40 hyper-glass-nav border-t border-[var(--hyper-border-subtle)] px-4 py-3 sm:py-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <div className="max-w-2xl mx-auto flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleBackRequest}
-              disabled={loading}
-              className="w-1/3 py-3 rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-xs sm:text-sm transition cursor-pointer select-none"
-            >
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              form="rent-deposit-form"
-              disabled={loading}
-              className="w-2/3 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs sm:text-sm shadow-md shadow-emerald-600/25 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
-            >
-              {loading && <Loader2 className="w-4 h-4 animate-spin text-white" />}
-              <span>
-                {loading
-                  ? isBn
-                    ? 'জমা হচ্ছে...'
-                    : 'Processing...'
-                  : isBn
-                  ? 'ভাড়া জমা নিশ্চিত করুন'
-                  : 'Confirm Rent Deposit'}
-              </span>
-            </button>
-          </div>
-        </footer>
-      )}
 
       {/* ===================================================================== */}
       {/* Unsaved Changes Confirmation Dialog (Destructive Nav Guard Only)      */}
@@ -558,7 +644,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
                 type="button"
                 onClick={() => {
                   setShowDiscardConfirm(false);
-                  onBack();
+                  forceBack();
                 }}
                 className="flex-1 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition cursor-pointer"
               >

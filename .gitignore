@@ -15,6 +15,7 @@ dist/
 dist-ssr/
 .cache/
 coverage/
+*.apk
 
 # Environment and sensitive variables
 .env
@@ -44,6 +45,9 @@ service-account*.json
 *.sln
 *.sw?
 *.local
+
+# Scratch and temporary testing files
+scratch/
 
 # Local Chrome browser profile data
 poc/phase-10-2a/chrome-profile-icons/

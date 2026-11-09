@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -11,13 +11,17 @@ import type { Tenant } from '../types/tenant';
 import type { RentBill, RentPayment, Expense } from '../types/finance';
 import { formatLocalizedCurrency, formatLocalizedMonth } from '../utils/banglaFormat';
 import { getDhakaDateInfo, getUserDisplayName } from '../utils/dhakaDate';
+import { processProfileImage } from '../utils/imageUtils';
 
 // Full-Page Financial Workflows & Modals
 import RentDepositPage from './finance/RentDepositPage';
 import AddExpensePage from './finance/AddExpensePage';
 import SimpleTenantDetailsModal from './khata/SimpleTenantDetailsModal';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAppNavigation } from '../contexts/NavigationContext';
 import { SettingsCenter } from './settings/SettingsCenter';
+import { DEFAULT_ANIMATION_SETTINGS } from '../types/settings';
+import { ProfilePhotoModal } from './profile/ProfilePhotoModal';
 
 // Lucide Icons
 import {
@@ -44,6 +48,8 @@ import {
   LogOut,
   DoorClosed,
   UserPlus,
+  Camera,
+  Check,
 } from 'lucide-react';
 
 // Modals for Property, Unit, Tenant creation
@@ -51,8 +57,7 @@ import PropertyModal from './properties/PropertyModal';
 import UnitModal from './properties/UnitModal';
 import TenantModal from './tenants/TenantModal';
 import { MemberManagementModal } from './members/MemberManagementModal';
-import { LiquidGlass } from './ui/LiquidGlass';
-import { HyperCard, StatTile, FloatingPillNav } from './ui/hyperos';
+import { HyperCard, StatTile, FloatingPillNav, PageTransitionContainer } from './ui/hyperos';
 
 // Existing Sub-Views (Lazy Loaded for drill-downs & full view access)
 const PropertyManagementView = lazy(() => import('./properties/PropertyManagementView'));
@@ -82,14 +87,58 @@ export type ActiveDashboardSection =
   | 'add-expense';
 
 export default function AdminDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, photoURL, updatePhotoURL } = useAuth();
   const { workspaceId, role, isMasterAdmin, canAccessTab } = useWorkspace();
   const { currentLanguage, t } = useLanguage();
+  const { settings } = useSettings();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Primary Sections & Full-Page Workflows
-  const [activeSection, setActiveSection] = useState<ActiveDashboardSection>('home');
-  const [previousSection, setPreviousSection] = useState<'home' | 'accounts' | 'profile'>('home');
+  // Profile Photo Management
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoToast, setPhotoToast] = useState<string | null>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await processProfileImage(file, 320, 0.88);
+      setPreviewPhoto(dataUrl);
+      setIsPhotoModalOpen(true);
+    } catch (err) {
+      console.error('Failed to process image:', err);
+      alert(currentLanguage === 'bn' ? 'ছবি প্রক্রিয়া করতে সমস্যা হয়েছে।' : 'Failed to process image.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSavePhoto = async (photoDataUrl: string) => {
+    await updatePhotoURL(photoDataUrl);
+    setPhotoToast(currentLanguage === 'bn' ? 'প্রোফাইল ছবি সফলভাবে আপডেট হয়েছে!' : 'Profile photo updated successfully!');
+    setTimeout(() => setPhotoToast(null), 3000);
+  };
+
+  const handleRemovePhoto = async () => {
+    await updatePhotoURL(null);
+    setPhotoToast(currentLanguage === 'bn' ? 'প্রোফাইল ছবি সরানো হয়েছে!' : 'Profile photo removed!');
+    setTimeout(() => setPhotoToast(null), 3000);
+  };
+
+  // Central App Navigation (handles browser back, Android system back, pushState & popstate)
+  const {
+    activeSection,
+    drillDownView,
+    preSelectedTenantId,
+    navigateTo,
+    setDrillDownView,
+    goBack,
+    registerBackGuard,
+    direction,
+  } = useAppNavigation();
+
+  const animSettings = settings?.appearance?.navigationAnimation || DEFAULT_ANIMATION_SETTINGS;
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -101,11 +150,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Sub-detail drill-downs (when user wants full tables / management views)
-  const [drillDownView, setDrillDownView] = useState<
-    'properties' | 'tenants' | 'rent' | 'expenses' | 'distribution' | 'reports' | null
-  >(null);
-
   // Month state (YYYY-MM)
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
@@ -115,7 +159,6 @@ export default function AdminDashboard() {
   });
 
   // Centralized App Settings
-  const { settings } = useSettings();
   const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
   const isBn = currentLanguage === 'bn';
 
@@ -127,6 +170,37 @@ export default function AdminDashboard() {
   const [unitModalOpen, setUnitModalOpen] = useState(false);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [memberManagementModalOpen, setMemberManagementModalOpen] = useState(false);
+
+  // Close modals on browser/system back button
+  useEffect(() => {
+    const isAnyModalOpen =
+      tenantDetailsModalOpen ||
+      propertyModalOpen ||
+      unitModalOpen ||
+      tenantModalOpen ||
+      memberManagementModalOpen;
+
+    if (!isAnyModalOpen) return;
+
+    return registerBackGuard({
+      id: 'admin-dashboard-modals',
+      isDirty: () => isAnyModalOpen,
+      onBlocked: () => {
+        setTenantDetailsModalOpen(false);
+        setPropertyModalOpen(false);
+        setUnitModalOpen(false);
+        setTenantModalOpen(false);
+        setMemberManagementModalOpen(false);
+      },
+    });
+  }, [
+    tenantDetailsModalOpen,
+    propertyModalOpen,
+    unitModalOpen,
+    tenantModalOpen,
+    memberManagementModalOpen,
+    registerBackGuard,
+  ]);
 
   // Real-time data state
   const [properties, setProperties] = useState<Property[]>([]);
@@ -243,18 +317,12 @@ export default function AdminDashboard() {
 
   // Navigation helpers for full-page financial workflows
   function handleOpenRentDeposit(tenantId?: string | null) {
-    if (activeSection === 'home' || activeSection === 'accounts' || activeSection === 'profile') {
-      setPreviousSection(activeSection);
-    }
     setPaymentPreselectedTenantId(tenantId || null);
-    setActiveSection('rent-deposit');
+    navigateTo('rent-deposit', { preSelectedTenantId: tenantId || null });
   }
 
   function handleOpenAddExpense() {
-    if (activeSection === 'home' || activeSection === 'accounts' || activeSection === 'profile') {
-      setPreviousSection(activeSection);
-    }
-    setActiveSection('add-expense');
+    navigateTo('add-expense');
   }
 
   // Open rent payment page for specific tenant
@@ -272,47 +340,119 @@ export default function AdminDashboard() {
   const dhakaDate = getDhakaDateInfo(currentLanguage);
   const userName = getUserDisplayName(user?.displayName, user?.email);
 
-  // Dedicated Full-Page Rent Deposit View (Zero Popup, Zero Backdrop)
+  // Dedicated Full-Page Rent Deposit View with Floating Pill Navigation Dock
   if (activeSection === 'rent-deposit') {
     return (
-      <RentDepositPage
-        tenants={activeTenants}
-        bills={bills}
-        preSelectedTenantId={paymentPreselectedTenantId}
-        onBack={() => {
-          setPaymentPreselectedTenantId(null);
-          setActiveSection(previousSection);
-        }}
-        onSuccess={() => {
-          // Handled via real-time listeners
-        }}
-      />
+      <div className="min-h-screen flex flex-col bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200">
+        <PageTransitionContainer
+          transitionKey="rent-deposit"
+          direction={direction}
+          style={animSettings.pageTransition}
+          speed={animSettings.speed}
+          reducedMotion={animSettings.reducedMotion}
+          className="flex-1"
+        >
+          <RentDepositPage
+            tenants={activeTenants}
+            bills={bills}
+            preSelectedTenantId={preSelectedTenantId || paymentPreselectedTenantId}
+            onBack={goBack}
+            onSuccess={() => {
+              // Handled via real-time listeners
+            }}
+          />
+        </PageTransitionContainer>
+
+        <FloatingPillNav
+          activeSection={activeSection}
+          drillDownView={null}
+          onSelectSection={(section) => {
+            navigateTo(section);
+          }}
+          onOpenNewExpense={() => {
+            if (!canAccessTab('expenses')) {
+              alert('আপনার খরচ যুক্ত করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenAddExpense();
+          }}
+          onOpenRentPayment={() => {
+            if (!canAccessTab('rent')) {
+              alert('আপনার ভাড়া আদায় করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenRentDeposit(null);
+          }}
+          canCreateExpense={canAccessTab('expenses')}
+          canCollectRent={canAccessTab('rent')}
+        />
+      </div>
     );
   }
 
-  // Dedicated Full-Page Add Expense View (Zero Popup, Zero Backdrop)
+  // Dedicated Full-Page Add Expense View with Floating Pill Navigation Dock
   if (activeSection === 'add-expense') {
     return (
-      <AddExpensePage
-        properties={activeProperties}
-        onBack={() => {
-          setActiveSection(previousSection);
-        }}
-        onSuccess={() => {
-          // Handled via real-time listeners
-        }}
-      />
+      <div className="min-h-screen flex flex-col bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200">
+        <PageTransitionContainer
+          transitionKey="add-expense"
+          direction={direction}
+          style={animSettings.pageTransition}
+          speed={animSettings.speed}
+          reducedMotion={animSettings.reducedMotion}
+          className="flex-1"
+        >
+          <AddExpensePage
+            properties={activeProperties}
+            onBack={goBack}
+            onSuccess={() => {
+              // Handled via real-time listeners
+            }}
+          />
+        </PageTransitionContainer>
+
+        <FloatingPillNav
+          activeSection={activeSection}
+          drillDownView={null}
+          onSelectSection={(section) => {
+            navigateTo(section);
+          }}
+          onOpenNewExpense={() => {
+            if (!canAccessTab('expenses')) {
+              alert('আপনার খরচ যুক্ত করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenAddExpense();
+          }}
+          onOpenRentPayment={() => {
+            if (!canAccessTab('rent')) {
+              alert('আপনার ভাড়া আদায় করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenRentDeposit(null);
+          }}
+          canCreateExpense={canAccessTab('expenses')}
+          canCollectRent={canAccessTab('rent')}
+        />
+      </div>
     );
   }
 
   // Dedicated Full-Page Settings Center View (Zero Popup, Full Viewport)
   if (activeSection === 'settings') {
     return (
-      <div className="min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200">
+      <PageTransitionContainer
+        transitionKey="settings"
+        direction={direction}
+        style={animSettings.pageTransition}
+        speed={animSettings.speed}
+        reducedMotion={animSettings.reducedMotion}
+        className="min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200"
+      >
         <SettingsCenter
-          onBack={() => setActiveSection('profile')}
+          onBack={goBack}
           onOpenMemberManagement={() => {
-            setActiveSection('profile');
+            navigateTo('profile');
             setMemberManagementModalOpen(true);
           }}
         />
@@ -323,7 +463,7 @@ export default function AdminDashboard() {
             currentAdminUid={user?.uid || ''}
           />
         )}
-      </div>
+      </PageTransitionContainer>
     );
   }
 
@@ -366,10 +506,7 @@ export default function AdminDashboard() {
             <div className="hidden md:flex items-center gap-1.5 p-1 rounded-full border border-[var(--hyper-border)] shadow-xs bg-[var(--hyper-bg-card)]">
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSection('home');
-                  setDrillDownView(null);
-                }}
+                onClick={() => navigateTo('home')}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'home' && !drillDownView
                     ? 'bg-[#22B84A] text-white shadow-sm shadow-[#22B84A]/30'
@@ -382,10 +519,7 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSection('accounts');
-                  setDrillDownView(null);
-                }}
+                onClick={() => navigateTo('accounts')}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'accounts' && !drillDownView
                     ? 'bg-[#1685E8] text-white shadow-sm shadow-[#1685E8]/30'
@@ -398,10 +532,7 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSection('profile');
-                  setDrillDownView(null);
-                }}
+                onClick={() => navigateTo('profile')}
                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'profile' && !drillDownView
                     ? 'bg-[#7655E8] text-white shadow-sm shadow-[#7655E8]/30'
@@ -419,12 +550,20 @@ export default function AdminDashboard() {
       {/* ========================================================================= */}
       {/* 2. MAIN CONTAINER & SUB-VIEWS / SECTIONS                                 */}
       {/* ========================================================================= */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full">
+        <PageTransitionContainer
+          transitionKey={drillDownView ? `accounts-${drillDownView}` : activeSection}
+          direction={direction}
+          style={animSettings.pageTransition}
+          speed={animSettings.speed}
+          reducedMotion={animSettings.reducedMotion}
+          className="space-y-6"
+        >
         {/* Drill-down Back Button if inside a detailed view */}
         {drillDownView && (
           <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
             <button
-              onClick={() => setDrillDownView(null)}
+              onClick={goBack}
               className="flex items-center gap-2 text-sm font-bold text-emerald-700 hover:text-emerald-800 transition cursor-pointer"
             >
               <span>{t('common.backToKhata')}</span>
@@ -507,8 +646,12 @@ export default function AdminDashboard() {
 
                 {/* Authenticated User Name Card */}
                 <HyperCard className="p-3.5 sm:p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-[14px] bg-[var(--hyper-purple-bg)] text-[#7655E8] flex items-center justify-center shrink-0 border border-[#7655E8]/20">
-                    <UserRound className="w-5 h-5 text-[#7655E8]" strokeWidth={2.2} />
+                  <div className="w-10 h-10 rounded-[14px] overflow-hidden bg-[var(--hyper-purple-bg)] text-[#7655E8] flex items-center justify-center shrink-0 border border-[#7655E8]/20">
+                    {photoURL ? (
+                      <img src={photoURL} alt={userName} className="w-full h-full object-cover" />
+                    ) : (
+                      <UserRound className="w-5 h-5 text-[#7655E8]" strokeWidth={2.2} />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[11px] font-medium text-[var(--hyper-text-secondary)] truncate">
@@ -548,7 +691,7 @@ export default function AdminDashboard() {
                           <StatTile
                             key={card.id}
                             label={isBn ? card.labelBn : card.labelEn}
-                            subtitle={t('dashboard.remainingCollectable')}
+                            subtitle={t('dashboard.remainingDue')}
                             amount={formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
                             icon={Hourglass}
                             color={card.color}
@@ -572,7 +715,7 @@ export default function AdminDashboard() {
                           <StatTile
                             key={card.id}
                             label={isBn ? card.labelBn : card.labelEn}
-                            subtitle={t('dashboard.netCashAfterExpenses')}
+                            subtitle={t('dashboard.surplusAfterExpenses')}
                             amount={formatLocalizedCurrency(cashInHand, currentLanguage, useBanglaNumerals)}
                             icon={Coins}
                             color={card.color}
@@ -603,7 +746,7 @@ export default function AdminDashboard() {
                           if (qa.id === 'rentDeposit') handleOpenRentDeposit();
                           if (qa.id === 'newExpense') handleOpenAddExpense();
                           if (qa.id === 'addTenant') setTenantModalOpen(true);
-                          if (qa.id === 'allAccounts') setActiveSection('accounts');
+                          if (qa.id === 'allAccounts') navigateTo('accounts');
                         }}
                         className="p-3 rounded-[18px] bg-black/5 dark:bg-white/5 hover:bg-black/10 text-xs font-bold text-[var(--hyper-text-primary)] transition-all flex flex-col items-center gap-1.5 cursor-pointer"
                       >
@@ -692,15 +835,10 @@ export default function AdminDashboard() {
             {/* 4 Detail Khata Subsections */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 1. ভাড়া আদায় ও রশিদ */}
-              <LiquidGlass
-                className="p-5 rounded-3xl border border-white/80 shadow-sm hover:shadow-md space-y-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
+              <HyperCard variant="default" className="p-5 space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-base">
-                    <CreditCard className="w-4 h-4 text-emerald-700" />
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                    <CreditCard className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                     <span>{t('accounts.cards.rentCollection.title')}</span>
                   </h3>
                   <button
@@ -708,17 +846,17 @@ export default function AdminDashboard() {
                       if (!canAccessTab('rent')) return;
                       setDrillDownView('rent');
                     }}
-                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     {t('accounts.cards.rentCollection.viewDetail')}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {t('accounts.cards.rentCollection.desc')}
                 </p>
-                <div className="p-3 bg-white/70 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 shadow-2xs">
-                  <span className="text-slate-600">{t('accounts.cards.rentCollection.currMonthTotal')}</span>
-                  <span className="font-bold text-emerald-700 text-sm">
+                <div className="p-3 bg-white/70 dark:bg-white/5 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 dark:border-white/10 shadow-2xs">
+                  <span className="text-slate-600 dark:text-slate-300">{t('accounts.cards.rentCollection.currMonthTotal')}</span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
                     {formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
@@ -731,18 +869,13 @@ export default function AdminDashboard() {
                 >
                   {t('accounts.cards.rentCollection.btn')}
                 </button>
-              </LiquidGlass>
+              </HyperCard>
 
               {/* 2. রক্ষণাবেক্ষণ ও খরচ */}
-              <LiquidGlass
-                className="p-5 rounded-3xl border border-white/80 shadow-sm hover:shadow-md space-y-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
+              <HyperCard variant="default" className="p-5 space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-base">
-                    <ReceiptText className="w-4 h-4 text-amber-600" />
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                    <ReceiptText className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     <span>{t('accounts.cards.expenses.title')}</span>
                   </h3>
                   <button
@@ -750,17 +883,17 @@ export default function AdminDashboard() {
                       if (!canAccessTab('expenses')) return;
                       setDrillDownView('expenses');
                     }}
-                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     {t('accounts.cards.expenses.viewDetail')}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {t('accounts.cards.expenses.desc')}
                 </p>
-                <div className="p-3 bg-white/70 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 shadow-2xs">
-                  <span className="text-slate-600">{t('accounts.cards.expenses.currMonthTotal')}</span>
-                  <span className="font-bold text-amber-700 text-sm">
+                <div className="p-3 bg-white/70 dark:bg-white/5 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 dark:border-white/10 shadow-2xs">
+                  <span className="text-slate-600 dark:text-slate-300">{t('accounts.cards.expenses.currMonthTotal')}</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-400 text-sm">
                     {formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
@@ -771,70 +904,60 @@ export default function AdminDashboard() {
                 >
                   {t('accounts.cards.expenses.btn')}
                 </button>
-              </LiquidGlass>
+              </HyperCard>
 
               {/* 3. পারিবারিক বণ্টন ও রিজার্ভ */}
-              <LiquidGlass
-                className="p-5 rounded-3xl border border-white/80 shadow-sm hover:shadow-md space-y-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
+              <HyperCard variant="default" className="p-5 space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-base">
-                    <Scale className="w-4 h-4 text-indigo-600" />
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                    <Scale className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>{t('accounts.cards.distribution.title')}</span>
                   </h3>
                   {canAccessTab('distribution') ? (
                     <button
                       onClick={() => setDrillDownView('distribution')}
-                      className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                      className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
                     >
                       {t('accounts.cards.distribution.viewDetail')}
                     </button>
                   ) : (
-                    <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+                    <span className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-900/40">
                       {t('accounts.cards.distribution.locked')}
                     </span>
                   )}
                 </div>
 
                 {!canAccessTab('distribution') ? (
-                  <div className="p-4 bg-white/60 backdrop-blur-xs rounded-2xl text-center text-xs text-slate-500 space-y-1 border border-white/70">
-                    <p className="font-semibold text-slate-700">{t('accounts.cards.distribution.lockedDesc')}</p>
+                  <div className="p-4 bg-white/60 dark:bg-white/5 backdrop-blur-xs rounded-2xl text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 border border-white/70 dark:border-white/10">
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">{t('accounts.cards.distribution.lockedDesc')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {t('accounts.cards.distribution.targetDesc')}
                     </p>
                     <div className="space-y-1.5 text-xs">
                       {['Brother 1', 'Brother 2', 'Brother 3'].map((bName) => (
                         <div
                           key={bName}
-                          className="flex justify-between items-center p-2 rounded-xl bg-white/70 backdrop-blur-xs border border-white/80 shadow-2xs"
+                          className="flex justify-between items-center p-2 rounded-xl bg-white/70 dark:bg-white/5 backdrop-blur-xs border border-white/80 dark:border-white/10 shadow-2xs"
                         >
-                          <span className="font-semibold text-slate-800">{bName}</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{bName}</span>
                           <div className="text-right">
-                            <span className="text-slate-500 text-[10px]">{t('accounts.cards.distribution.brotherTarget')}</span>
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px]">{t('accounts.cards.distribution.brotherTarget')}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-              </LiquidGlass>
+              </HyperCard>
 
               {/* 4. বকেয়া ও হিসাব রিপোর্ট */}
-              <LiquidGlass
-                className="p-5 rounded-3xl border border-white/80 shadow-sm hover:shadow-md space-y-3 transition"
-                scale={-100}
-                chroma={5}
-                blur={4}
-              >
+              <HyperCard variant="default" className="p-5 space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-base">
-                    <BarChart3 className="w-4 h-4 text-teal-600" />
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                    <BarChart3 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                     <span>{t('accounts.cards.reports.title')}</span>
                   </h3>
                   <button
@@ -842,17 +965,17 @@ export default function AdminDashboard() {
                       if (!canAccessTab('reports')) return;
                       setDrillDownView('reports');
                     }}
-                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     {t('accounts.cards.reports.viewDetail')}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {t('accounts.cards.reports.desc')}
                 </p>
-                <div className="p-3 bg-red-50/80 border border-red-100 rounded-2xl flex justify-between items-center text-xs shadow-2xs">
-                  <span className="text-red-900 font-semibold">{t('accounts.cards.reports.totalDue')}</span>
-                  <span className="font-bold text-red-700 text-sm">
+                <div className="p-3 bg-red-50/80 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-2xl flex justify-between items-center text-xs shadow-2xs">
+                  <span className="text-red-900 dark:text-red-300 font-semibold">{t('accounts.cards.reports.totalDue')}</span>
+                  <span className="font-bold text-red-700 dark:text-red-400 text-sm">
                     {formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
                   </span>
                 </div>
@@ -862,38 +985,33 @@ export default function AdminDashboard() {
                 >
                   {t('accounts.cards.reports.btn')}
                 </button>
-              </LiquidGlass>
+              </HyperCard>
             </div>
 
             {/* Active Property Card Overview */}
-            <LiquidGlass
-              className="p-5 rounded-3xl border border-white/80 shadow-sm space-y-3"
-              scale={-100}
-              chroma={5}
-              blur={4}
-            >
+            <HyperCard variant="default" className="p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-700" />
+                  <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                     <span>{properties[0]?.name || 'ভূঁইয়া বাড়ি'}</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-semibold border border-emerald-200 dark:border-emerald-800/50">
                       {t('dashboard.activeBuilding')}
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500">{t('dashboard.propertyDescription')}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.propertyDescription')}</p>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => setDrillDownView('properties')}
-                    className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs border border-emerald-200 transition cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold text-xs border border-emerald-200 dark:border-emerald-800/40 transition cursor-pointer"
                   >
                     {t('dashboard.propertiesAndFlats')}
                   </button>
                   <button
                     onClick={() => setDrillDownView('properties')}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-300 transition cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-white/10 transition cursor-pointer"
                   >
                     {t('dashboard.manageFlats')}
                   </button>
@@ -902,9 +1020,9 @@ export default function AdminDashboard() {
 
               {/* Units summary badge */}
               <div className="grid grid-cols-3 gap-2 pt-2 text-center text-xs">
-                <div className="p-2.5 rounded-2xl bg-white/70 border border-white/80 shadow-2xs">
-                  <span className="text-slate-500 block">{t('dashboard.totalUnits')}</span>
-                  <span className="font-bold text-slate-800 text-sm">
+                <div className="p-2.5 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/80 dark:border-white/10 shadow-2xs">
+                  <span className="text-slate-500 dark:text-slate-400 block">{t('dashboard.totalUnits')}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
                     {useBanglaNumerals && currentLanguage === 'bn'
                       ? (activeUnits.length > 0 ? activeUnits.length : 1).toLocaleString('bn-BD')
                       : activeUnits.length > 0
@@ -913,9 +1031,9 @@ export default function AdminDashboard() {
                     {t('dashboard.unitsCountUnit')}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 shadow-2xs">
-                  <span className="text-emerald-800 block">{t('dashboard.occupiedUnits')}</span>
-                  <span className="font-bold text-emerald-900 text-sm">
+                <div className="p-2.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 shadow-2xs">
+                  <span className="text-emerald-800 dark:text-emerald-300 block">{t('dashboard.occupiedUnits')}</span>
+                  <span className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">
                     {useBanglaNumerals && currentLanguage === 'bn'
                       ? (activeTenants.length > 0 ? activeTenants.length : 1).toLocaleString('bn-BD')
                       : activeTenants.length > 0
@@ -924,42 +1042,42 @@ export default function AdminDashboard() {
                     {t('dashboard.unitsCountUnit')}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-2xl bg-white/70 border border-white/80 shadow-2xs">
-                  <span className="text-slate-500 block">{t('dashboard.vacantUnits')}</span>
-                  <span className="font-bold text-slate-800 text-sm">
+                <div className="p-2.5 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/80 dark:border-white/10 shadow-2xs">
+                  <span className="text-slate-500 dark:text-slate-400 block">{t('dashboard.vacantUnits')}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
                     {useBanglaNumerals && currentLanguage === 'bn' ? '০' : '0'}{' '}
                     {t('dashboard.unitsCountUnit')}
                   </span>
                 </div>
               </div>
-            </LiquidGlass>
+            </HyperCard>
 
             {/* Tenant Cards List (Readable Family Cards) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-700" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                     <span>{t('dashboard.tenantsList')}</span>
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {t('dashboard.tenantsListSubtitle')}
                   </p>
                 </div>
                 <button
                   onClick={() => setDrillDownView('tenants')}
-                  className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                  className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:underline cursor-pointer"
                 >
                   {t('dashboard.viewFullTenantList')}
                 </button>
               </div>
 
               {activeTenants.length === 0 ? (
-                <div className="p-8 text-center bg-white/80 backdrop-blur-md rounded-3xl border border-white/80 shadow-sm space-y-2">
-                  <p className="text-slate-500 font-medium">{t('dashboard.noTenants')}</p>
+                <div className="p-8 text-center bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-3xl border border-white/80 dark:border-white/10 shadow-sm space-y-2">
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">{t('dashboard.noTenants')}</p>
                   <button
                     onClick={() => setTenantModalOpen(true)}
-                    className="px-4 py-2 rounded-2xl bg-emerald-600 text-white font-semibold text-xs shadow-xs cursor-pointer"
+                    className="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs cursor-pointer"
                   >
                     {t('dashboard.addNewTenant')}
                   </button>
@@ -970,12 +1088,10 @@ export default function AdminDashboard() {
                     const status = getTenantMonthStatus(tItem);
                     const assignedUnit = units.find((u) => u.id === tItem.unitId);
                     return (
-                      <LiquidGlass
+                      <HyperCard
                         key={tItem.id}
-                        className="p-4 sm:p-5 rounded-3xl border border-white/80 hover:border-emerald-500/80 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-3"
-                        scale={-95}
-                        chroma={5}
-                        blur={4}
+                        variant="default"
+                        className="p-4 sm:p-5 flex flex-col justify-between space-y-3"
                       >
                         {/* Tenant Top */}
                         <div className="flex items-start justify-between">
@@ -984,16 +1100,16 @@ export default function AdminDashboard() {
                             onClick={() => handleOpenTenantDetails(tItem)}
                             className="flex items-center gap-3 text-left group cursor-pointer"
                           >
-                            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-base group-hover:scale-105 transition shadow-2xs border border-emerald-200">
-                              <UserRound className="w-5 h-5 text-emerald-800" />
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-base group-hover:scale-105 transition shadow-2xs border border-emerald-200 dark:border-emerald-800/50">
+                              <UserRound className="w-5 h-5 text-emerald-800 dark:text-emerald-300" />
                             </div>
                             <div>
-                              <h4 className="font-bold text-slate-900 text-base group-hover:text-emerald-700 transition">
+                              <h4 className="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition">
                                 {tItem.name}
                               </h4>
-                              <p className="text-xs text-slate-500 font-medium">
+                              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                                 ভবন: ভূঁইয়া বাড়ি •{' '}
-                                <span className="font-semibold text-slate-700">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
                                   {assignedUnit?.unitNumber || 'Flat 1A'}
                                 </span>
                               </p>
@@ -1003,10 +1119,10 @@ export default function AdminDashboard() {
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-bold shadow-2xs ${
                               status.isPaid
-                                ? 'bg-emerald-100/90 text-emerald-900 border border-emerald-200'
+                                ? 'bg-emerald-100/90 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50'
                                 : status.isPartial
-                                ? 'bg-amber-100/90 text-amber-900 border border-amber-200'
-                                : 'bg-red-100/90 text-red-900 border border-red-200'
+                                ? 'bg-amber-100/90 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/50'
+                                : 'bg-red-100/90 dark:bg-red-950/60 text-red-900 dark:text-red-200 border border-red-200 dark:border-red-800/50'
                             }`}
                           >
                             {status.isPaid
@@ -1018,29 +1134,29 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Rent Breakdown */}
-                        <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-white/60 backdrop-blur-xs rounded-2xl text-xs border border-white/70">
+                        <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-white/60 dark:bg-white/5 backdrop-blur-xs rounded-2xl text-xs border border-white/70 dark:border-white/10">
                           <div>
-                            <span className="text-slate-500 block text-[10px]">{t('dashboard.monthlyRentLabel')}</span>
-                            <span className="font-bold text-slate-800">
+                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.monthlyRentLabel')}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
                               {formatLocalizedCurrency(tItem.monthlyRent, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block text-[10px]">{t('dashboard.rentCollected')}</span>
-                            <span className="font-bold text-emerald-700">
+                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.rentCollected')}</span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400">
                               {formatLocalizedCurrency(status.paid, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block text-[10px]">{t('dashboard.rentRemaining')}</span>
-                            <span className="font-bold text-red-600">
+                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.rentRemaining')}</span>
+                            <span className="font-bold text-red-600 dark:text-red-400">
                               {formatLocalizedCurrency(status.due, currentLanguage, useBanglaNumerals)}
                             </span>
                           </div>
                         </div>
 
                         {/* Action row */}
-                        <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100">
+                        <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100 dark:border-white/10">
                           <span className="text-slate-400">
                             {t('dashboard.mobileLabel')} {tItem.mobile || t('dashboard.notProvided')}
                           </span>
@@ -1055,7 +1171,7 @@ export default function AdminDashboard() {
                             {t('dashboard.collectRentAction')}
                           </button>
                         </div>
-                      </LiquidGlass>
+                      </HyperCard>
                     );
                   })}
                 </div>
@@ -1063,9 +1179,9 @@ export default function AdminDashboard() {
             </div>
 
             {/* Recent Activity Feed */}
-            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-700" />
+            <div className="bg-white dark:bg-[#1c1c1f] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xs space-y-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                 <span>{t('dashboard.recentActivity')}</span>
               </h3>
 
@@ -1078,21 +1194,21 @@ export default function AdminDashboard() {
                   {selectedMonthPayments.map((p) => (
                     <div
                       key={p.id}
-                      className="flex justify-between items-center p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100 text-xs"
+                      className="flex justify-between items-center p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 text-xs"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-emerald-200/70 text-emerald-900 flex items-center justify-center font-bold">
-                          <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-900" />
+                        <span className="w-7 h-7 rounded-xl bg-emerald-200/70 dark:bg-emerald-800/50 text-emerald-900 dark:text-emerald-100 flex items-center justify-center font-bold">
+                          <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-900 dark:text-emerald-100" />
                         </span>
                         <div>
-                          <div className="font-bold text-slate-800">{t('dashboard.rentCollectedActivity')}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">
+                          <div className="font-bold text-slate-800 dark:text-slate-100">{t('dashboard.rentCollectedActivity')}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                             {t('dashboard.receipt')} {p.receiptNumber || p.id.slice(0, 8)} ({p.paymentMethod})
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-emerald-800 text-sm">
+                        <div className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">
                           +{formatLocalizedCurrency(p.amount, currentLanguage, useBanglaNumerals)}
                         </div>
                         <div className="text-[10px] text-slate-400">
@@ -1105,19 +1221,19 @@ export default function AdminDashboard() {
                   {selectedMonthExpenses.map((e) => (
                     <div
                       key={e.id}
-                      className="flex justify-between items-center p-3 rounded-2xl bg-amber-50/60 border border-amber-100 text-xs"
+                      className="flex justify-between items-center p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800/40 text-xs"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-amber-200/70 text-amber-900 flex items-center justify-center font-bold">
-                          <ArrowUpRight className="w-3.5 h-3.5 text-amber-900" />
+                        <span className="w-7 h-7 rounded-xl bg-amber-200/70 dark:bg-amber-800/50 text-amber-900 dark:text-amber-100 flex items-center justify-center font-bold">
+                          <ArrowUpRight className="w-3.5 h-3.5 text-amber-900 dark:text-amber-100" />
                         </span>
                         <div>
-                          <div className="font-bold text-slate-800">{e.title}</div>
-                          <div className="text-[11px] text-slate-500">{t('dashboard.category')} {e.category}</div>
+                          <div className="font-bold text-slate-800 dark:text-slate-100">{e.title}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('dashboard.category')} {e.category}</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-amber-800 text-sm">
+                        <div className="font-bold text-amber-800 dark:text-amber-300 text-sm">
                           -{formatLocalizedCurrency(e.amount, currentLanguage, useBanglaNumerals)}
                         </div>
                         <div className="text-[10px] text-slate-400">{e.expenseDate}</div>
@@ -1136,18 +1252,45 @@ export default function AdminDashboard() {
         {!drillDownView && activeSection === 'profile' && (
           <div className="space-y-4 max-w-2xl mx-auto pb-24">
             {/* 1. User Profile & Identity Card */}
-            <HyperCard variant="default" className="p-5 sm:p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-700/20 shrink-0">
-                  <UserRound className="w-7 h-7 text-white" />
+            <HyperCard variant="default" className="p-4 sm:p-5">
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                {/* Avatar with Camera Overlay & Interactive Click */}
+                <div className="relative group shrink-0">
+                  <div
+                    onClick={() => {
+                      if (photoURL) {
+                        setPreviewPhoto(null);
+                        setIsPhotoModalOpen(true);
+                      } else {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-[22px] overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-emerald-700/20 border-2 border-white/80 dark:border-white/10 cursor-pointer active:scale-95 transition-transform"
+                    title={isBn ? 'প্রোফাইল ছবি পরিবর্তন করতে ক্লিক করুন' : 'Click to change profile picture'}
+                  >
+                    {photoURL ? (
+                      <img src={photoURL} alt={userName} className="w-full h-full object-cover" />
+                    ) : (
+                      <UserRound className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label={isBn ? 'ছবি পরিবর্তন করুন' : 'Change Photo'}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-[#202023] transition-transform active:scale-90 cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </button>
                 </div>
+
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg sm:text-xl font-bold text-[var(--hyper-text-primary)] leading-tight truncate">
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight truncate">
                       {userName}
                     </h2>
                     <span
-                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                         isMasterAdmin
                           ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/20'
                           : role === 'manager'
@@ -1165,11 +1308,40 @@ export default function AdminDashboard() {
                   <p className="text-xs text-[var(--hyper-text-secondary)] mt-0.5 truncate">
                     {user?.email || 'admin@bhuiyan.com'}
                   </p>
-                  <div className="flex items-center gap-2 text-[10px] text-[var(--hyper-text-tertiary)] mt-1.5">
-                    <Clock className="w-3 h-3" />
-                    <span>{dhakaDate.fullDate} ({dhakaDate.weekday})</span>
+                  
+                  {/* Photo Actions Row */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>{photoURL ? (isBn ? 'ছবি পরিবর্তন' : 'Change Photo') : (isBn ? 'ছবি যোগ করুন' : 'Add Photo')}</span>
+                    </button>
+                    {photoURL && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewPhoto(null);
+                          setIsPhotoModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] font-medium text-[11px] transition cursor-pointer"
+                      >
+                        {isBn ? 'ছবি দেখুন / মুছুন' : 'View / Remove'}
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Hidden native file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
               </div>
             </HyperCard>
 
@@ -1216,7 +1388,7 @@ export default function AdminDashboard() {
               variant="default"
               clickable
               data-settings-trigger="true"
-              onClick={() => setActiveSection('settings')}
+              onClick={() => navigateTo('settings')}
               className="p-5 sm:p-6 cursor-pointer border border-[#22B84A]/30 bg-[#22B84A]/[0.04] hover:bg-[#22B84A]/[0.08] transition-all select-none group"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1296,6 +1468,7 @@ export default function AdminDashboard() {
             </HyperCard>
           </div>
         )}
+        </PageTransitionContainer>
       </main>
 
       {/* ========================================================================= */}
@@ -1305,8 +1478,7 @@ export default function AdminDashboard() {
         activeSection={activeSection}
         drillDownView={drillDownView}
         onSelectSection={(section) => {
-          setActiveSection(section);
-          setDrillDownView(null);
+          navigateTo(section);
         }}
         onOpenNewExpense={() => {
           if (!canAccessTab('expenses')) {
@@ -1393,6 +1565,30 @@ export default function AdminDashboard() {
           onClose={() => setMemberManagementModalOpen(false)}
           currentAdminUid={user?.uid || ''}
         />
+      )}
+
+      {/* Profile Photo Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => {
+          setIsPhotoModalOpen(false);
+          setPreviewPhoto(null);
+        }}
+        previewUrl={previewPhoto}
+        currentPhotoUrl={photoURL}
+        onSave={handleSavePhoto}
+        onRemove={handleRemovePhoto}
+        onPickAnother={() => fileInputRef.current?.click()}
+      />
+
+      {/* Floating Toast Notification */}
+      {photoToast && (
+        <div className="fixed top-5 inset-x-0 z-[10000] flex justify-center pointer-events-none px-4 animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="px-4 py-2 rounded-2xl bg-[#22B84A] text-white font-semibold text-xs shadow-lg flex items-center gap-2 pointer-events-auto">
+            <Check className="w-4 h-4" />
+            <span>{photoToast}</span>
+          </div>
+        </div>
       )}
     </div>
   );

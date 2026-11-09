@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Property } from '../../types/property';
 import type { BuildingExpenseCategory } from '../../types/finance';
 import { EXPENSE_CATEGORIES } from '../../types/appPreferences';
@@ -6,6 +6,8 @@ import { createExpense } from '../../services/expenseService';
 import { formatLocalizedCurrency } from '../../utils/banglaFormat';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAppNavigation } from '../../contexts/NavigationContext';
+import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
 import {
   ReceiptText,
   ArrowLeft,
@@ -13,7 +15,30 @@ import {
   Loader2,
   AlertTriangle,
   RotateCcw,
+  Zap,
+  Droplet,
+  Flame,
+  Wrench,
+  UserCheck,
+  Shield,
+  Sparkles,
+  Tag,
+  Building2,
 } from 'lucide-react';
+
+const CATEGORY_META: Record<
+  BuildingExpenseCategory,
+  { icon: React.FC<{ className?: string; strokeWidth?: number }>; bg: string; color: string }
+> = {
+  electricity: { icon: Zap, bg: 'bg-amber-500/15', color: 'text-amber-600 dark:text-amber-400' },
+  water: { icon: Droplet, bg: 'bg-blue-500/15', color: 'text-blue-600 dark:text-blue-400' },
+  gas: { icon: Flame, bg: 'bg-orange-500/15', color: 'text-orange-600 dark:text-orange-400' },
+  maintenance_repair: { icon: Wrench, bg: 'bg-purple-500/15', color: 'text-purple-600 dark:text-purple-400' },
+  caretaker_salary: { icon: UserCheck, bg: 'bg-emerald-500/15', color: 'text-emerald-600 dark:text-emerald-400' },
+  security: { icon: Shield, bg: 'bg-indigo-500/15', color: 'text-indigo-600 dark:text-indigo-400' },
+  cleaning: { icon: Sparkles, bg: 'bg-cyan-500/15', color: 'text-cyan-600 dark:text-cyan-400' },
+  other_building: { icon: ReceiptText, bg: 'bg-slate-500/15', color: 'text-slate-600 dark:text-slate-400' },
+};
 
 export interface AddExpensePageProps {
   properties: Property[];
@@ -30,6 +55,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
 }) => {
   const { currentLanguage, t } = useLanguage();
   const { settings } = useSettings();
+  const { goBack, forceBack, registerBackGuard } = useAppNavigation();
   const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
   const isBn = currentLanguage === 'bn';
 
@@ -53,6 +79,42 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
     expenseDate: string;
   } | null>(null);
 
+  const categoryOptions: FrostedGlassOption<BuildingExpenseCategory>[] = useMemo(() => {
+    return EXPENSE_CATEGORIES.map((c) => {
+      const meta = CATEGORY_META[c.id];
+      return {
+        value: c.id,
+        labelBn: c.label,
+        labelEn: c.id.replace(/_/g, ' '),
+        icon: meta.icon,
+        iconBg: meta.bg,
+        iconColor: meta.color,
+      };
+    });
+  }, []);
+
+  const propertyOptions: FrostedGlassOption<string>[] = useMemo(() => {
+    const allPropsOption: FrostedGlassOption<string> = {
+      value: '',
+      labelBn: isBn ? 'সকল সম্পত্তি' : 'All Properties',
+      labelEn: 'All Properties',
+      descriptionBn: isBn ? 'কোন নির্দিষ্ট প্রপার্টি সীমাবদ্ধ নয়' : 'Not restricted to a specific property',
+      descriptionEn: 'Not restricted to a specific property',
+      icon: Building2,
+      iconBg: 'bg-blue-500/15',
+      iconColor: 'text-[#1685E8]',
+    };
+    const propList = properties.map((p) => ({
+      value: p.id,
+      labelBn: p.name,
+      labelEn: p.name,
+      icon: Building2,
+      iconBg: 'bg-emerald-500/15',
+      iconColor: 'text-[#22B84A]',
+    }));
+    return [allPropsOption, ...propList];
+  }, [properties, isBn]);
+
   // Unsaved changes detection
   const isDirty =
     !successInfo &&
@@ -60,11 +122,27 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
       amount !== '' ||
       description.trim().length > 0);
 
+  const isDirtyRef = useRef(isDirty);
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  // Register unified browser back guard (protects Android hardware back & swipe gestures)
+  useEffect(() => {
+    return registerBackGuard({
+      id: 'add-expense-guard',
+      isDirty: () => isDirtyRef.current,
+      onBlocked: () => {
+        setShowDiscardConfirm(true);
+      },
+    });
+  }, [registerBackGuard]);
+
   const handleBackRequest = () => {
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
-      onBack();
+      goBack();
     }
   };
 
@@ -145,31 +223,31 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
 
   return (
     <div
-      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-28 sm:pb-32 ${className}`}
+      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] ${className}`}
       data-testid="add-expense-fullpage"
     >
       {/* ===================================================================== */}
       {/* Top Header: HyperOS Glass Bar with Back Navigation                    */}
       {/* ===================================================================== */}
-      <header className="sticky top-0 z-30 hyper-glass-nav border-b border-[var(--hyper-border-subtle)] px-4 py-3 sm:px-6">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 hyper-glass-nav border-b border-[var(--hyper-border-subtle)] px-3.5 sm:px-6 pt-[calc(env(safe-area-inset-top,0px)+0.6rem)] pb-2.5">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={handleBackRequest}
               aria-label={t('common.back') || 'Back'}
-              className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+              className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-[#F28A24] flex items-center justify-center font-bold text-lg shrink-0">
-              <ReceiptText className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-[#F28A24] flex items-center justify-center font-bold text-base shrink-0">
+              <ReceiptText className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
+              <h1 className="text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] leading-tight">
                 {isBn ? 'নতুন খরচ যোগ করুন' : 'Add New Expense'}
               </h1>
-              <p className="text-[11px] text-[var(--hyper-text-secondary)]">
+              <p className="text-[10px] text-[var(--hyper-text-secondary)] leading-tight">
                 {isBn ? 'পারিবারিক খরচের হিসাব খাতা' : 'Family Expense Register'}
               </p>
             </div>
@@ -178,7 +256,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
           <button
             type="button"
             onClick={handleBackRequest}
-            className="hidden sm:inline-flex px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+            className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
           >
             {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
           </button>
@@ -186,31 +264,31 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
       </header>
 
       {/* ===================================================================== */}
-      {/* Main Content Area: Responsive Form Container (Centered Max-W-2XL)    */}
+      {/* Main Content Area: Responsive Form Container (Centered Max-W-XL)     */}
       {/* ===================================================================== */}
-      <main className="max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex-1">
+      <main className="max-w-xl w-full mx-auto px-3 sm:px-5 py-3 sm:py-4 flex-1">
         {successInfo ? (
           /* ================================================================= */
           /* Full-Page Success & Summary Card View                             */
           /* ================================================================= */
-          <div className="bg-[var(--hyper-surface)] rounded-3xl p-6 sm:p-8 border border-[var(--hyper-border-subtle)] shadow-xs text-center space-y-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="bg-[var(--hyper-surface)] rounded-2xl p-5 sm:p-7 border border-[var(--hyper-border-subtle)] shadow-xs text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-[var(--hyper-text-primary)]">
+              <h2 className="text-lg sm:text-xl font-bold text-[var(--hyper-text-primary)]">
                 {isBn ? 'খরচ সফলভাবে সংরক্ষিত হয়েছে!' : 'Expense Recorded Successfully!'}
               </h2>
-              <p className="text-xs sm:text-sm text-[var(--hyper-text-secondary)] mt-1">
+              <p className="text-xs text-[var(--hyper-text-secondary)] mt-1">
                 {isBn
                   ? 'পারিবারিক হিসাব খাতায় খরচ সফলভাবে যুক্ত হয়েছে'
                   : 'Expense added to family accounts ledger'}
               </p>
             </div>
 
-            <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-left space-y-3">
-              <div className="flex justify-between items-center text-sm border-b border-amber-500/15 pb-2.5">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-left space-y-2">
+              <div className="flex justify-between items-center text-xs border-b border-amber-500/15 pb-2">
                 <span className="text-[var(--hyper-text-secondary)]">
                   {isBn ? 'খরচের বিবরণ' : 'Expense Title'}
                 </span>
@@ -219,16 +297,16 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                 </span>
               </div>
 
-              <div className="flex justify-between items-center text-sm border-b border-amber-500/15 pb-2.5">
+              <div className="flex justify-between items-center text-xs border-b border-amber-500/15 pb-2">
                 <span className="text-[var(--hyper-text-secondary)]">
                   {isBn ? 'টাকার পরিমাণ' : 'Amount'}
                 </span>
-                <span className="font-bold text-[#F28A24] text-lg">
+                <span className="font-bold text-[#F28A24] text-base">
                   {formatLocalizedCurrency(successInfo.amount, currentLanguage, useBanglaNumerals)}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center text-sm border-b border-amber-500/15 pb-2.5">
+              <div className="flex justify-between items-center text-xs border-b border-amber-500/15 pb-2">
                 <span className="text-[var(--hyper-text-secondary)]">
                   {isBn ? 'ক্যাটাগরি' : 'Category'}
                 </span>
@@ -237,7 +315,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                 </span>
               </div>
 
-              <div className="flex justify-between items-center text-sm pt-0.5">
+              <div className="flex justify-between items-center text-xs pt-0.5">
                 <span className="text-[var(--hyper-text-secondary)]">
                   {isBn ? 'খরচের তারিখ' : 'Expense Date'}
                 </span>
@@ -247,19 +325,19 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={handleResetForm}
-                className="w-full sm:w-1/2 py-3 rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] hover:bg-black/5 dark:hover:bg-white/5 text-[var(--hyper-text-primary)] font-semibold text-sm transition cursor-pointer flex items-center justify-center gap-2"
+                className="w-full sm:w-1/2 py-2.5 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] hover:bg-black/5 dark:hover:bg-white/5 text-[var(--hyper-text-primary)] font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center justify-center gap-2"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span>{isBn ? 'আরেকটি খরচ যোগ করুন' : 'Add Another'}</span>
               </button>
               <button
                 type="button"
-                onClick={onBack}
-                className="w-full sm:w-1/2 py-3 rounded-2xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-sm shadow-md shadow-[#F28A24]/25 transition cursor-pointer"
+                onClick={onBack || goBack}
+                className="w-full sm:w-1/2 py-2.5 rounded-xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-xs sm:text-sm shadow-sm transition cursor-pointer"
               >
                 {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
               </button>
@@ -267,22 +345,22 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
           </div>
         ) : (
           /* ================================================================= */
-          /* Main Form Card                                                    */
+          /* Main Form Card (Compact HyperOS Styling)                          */
           /* ================================================================= */
-          <div className="bg-[var(--hyper-surface)] rounded-3xl p-5 sm:p-7 border border-[var(--hyper-border-subtle)] shadow-xs space-y-6">
+          <div className="bg-[var(--hyper-surface)] rounded-2xl p-3.5 sm:p-5 border border-[var(--hyper-border-subtle)] shadow-xs space-y-3">
             {error && (
-              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-300 text-xs sm:text-sm flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-300 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="flex-1 font-medium">{error}</div>
               </div>
             )}
 
-            <form id="add-expense-form" onSubmit={handleSubmit} className="space-y-5">
+            <form id="add-expense-form" onSubmit={handleSubmit} className="space-y-3">
               {/* Field 1: Expense Title */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label
                   htmlFor="expense-title-input"
-                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                  className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                 >
                   {isBn ? '১. খরচের নাম *' : '1. Expense Title *'}
                 </label>
@@ -295,25 +373,25 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     disabled={loading}
                     placeholder={
                       isBn
-                        ? 'যেমন: পানির মোটর মেরামত, ঝাড়ুদার বিল, ইলেকট্রিক বিল'
+                        ? 'যেমন: পানির মোটর মেরামত, ঝাড়ুদার বিল, কারেন্ট বিল'
                         : 'e.g. Water pump repair, cleaning fee, electric bill'
                     }
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition"
+                    className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                   />
                 </div>
               </div>
 
               {/* Field 2 & 3: Amount and Category in 2-Column Responsive Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="space-y-1">
                   <label
                     htmlFor="expense-amount-input"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
-                    {isBn ? '২. টাকার পরিমাণ (৳) *' : '2. Amount (৳) *'}
+                    {isBn ? '২. পরিমাণ (৳) *' : '2. Amount (৳) *'}
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--hyper-text-tertiary)] font-bold text-base select-none">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--hyper-text-tertiary)] font-bold text-sm select-none">
                       ৳
                     </span>
                     <input
@@ -326,42 +404,46 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                       }
                       disabled={loading}
                       placeholder="1500"
-                      className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-9 pr-4 py-3 text-base font-bold text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition"
+                      className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-7 pr-2.5 text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label
                     htmlFor="expense-category-select"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
                     {isBn ? '৩. ক্যাটাগরি *' : '3. Category *'}
                   </label>
-                  <select
+                  <FrostedGlassSelect<BuildingExpenseCategory>
                     id="expense-category-select"
                     value={category}
-                    onChange={(e) =>
-                      setCategory(e.target.value as BuildingExpenseCategory)
-                    }
+                    onChange={(newCat) => setCategory(newCat)}
+                    options={categoryOptions}
+                    titleBn="খরচের ক্যাটাগরি"
+                    titleEn="Expense Category"
+                    subtitleBn="তালিকা থেকে উপযুক্ত খরচের ধরন বাছাই করুন"
+                    subtitleEn="Select an expense category from the list"
+                    headerIcon={Tag}
+                    headerIconBg="bg-[#F28A24]/15"
+                    headerIconColor="text-[#F28A24]"
+                    triggerTestId="open-category-modal"
+                    modalTestId="expense-category-modal"
+                    confirmTestId="confirm-category-selection"
+                    triggerClassName="hover:border-[#F28A24] focus:ring-[#F28A24]/20"
                     disabled={loading}
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition cursor-pointer"
-                  >
-                    {EXPENSE_CATEGORIES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
+                    compact={true}
+                  />
                 </div>
               </div>
 
               {/* Field 4 & 5: Date and Property in 2-Column Responsive Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="space-y-1">
                   <label
                     htmlFor="expense-date-input"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
                     {isBn ? '৪. খরচের তারিখ *' : '4. Expense Date *'}
                   </label>
@@ -372,42 +454,43 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                       value={expenseDate}
                       onChange={(e) => setExpenseDate(e.target.value)}
                       disabled={loading}
-                      className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition"
+                      className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-2.5 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label
                     htmlFor="expense-property-select"
-                    className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                    className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                   >
-                    {isBn ? '৫. সম্পত্তি (ঐচ্ছিক)' : '5. Property (Optional)'}
+                    {isBn ? '৫. সম্পত্তি (ঐচ্ছিক)' : '5. Property (Opt)'}
                   </label>
-                  <select
+                  <FrostedGlassSelect<string>
                     id="expense-property-select"
                     value={propertyId}
-                    onChange={(e) => setPropertyId(e.target.value)}
+                    onChange={(newPropId) => setPropertyId(newPropId)}
+                    options={propertyOptions}
+                    titleBn="সম্পত্তি নির্বাচন"
+                    titleEn="Select Property"
+                    subtitleBn="খরচের জন্য প্রযোজ্য সম্পত্তি বাছাই করুন"
+                    subtitleEn="Choose the property applicable to this expense"
+                    headerIcon={Building2}
+                    headerIconBg="bg-blue-500/15"
+                    headerIconColor="text-[#1685E8]"
+                    triggerTestId="expense-property-trigger"
+                    modalTestId="expense-property-modal"
                     disabled={loading}
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition cursor-pointer"
-                  >
-                    <option value="">
-                      {isBn ? 'সকল সম্পত্তি (All Properties)' : 'All Properties'}
-                    </option>
-                    {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    compact={true}
+                  />
                 </div>
               </div>
 
               {/* Field 6: Description / Note */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label
                   htmlFor="expense-notes-input"
-                  className="block text-xs sm:text-sm font-bold text-[var(--hyper-text-primary)]"
+                  className="block text-xs font-bold text-[var(--hyper-text-primary)]"
                 >
                   {isBn
                     ? '৬. বিবরণ / নোট (ঐচ্ছিক)'
@@ -425,49 +508,42 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                         ? 'খরচের বিস্তারিত বিবরণ বা দোকানদারের মেমো নম্বর'
                         : 'Expense details or vendor invoice memo number'
                     }
-                    className="w-full rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-4 py-3 text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-2 focus:ring-[#F28A24]/20 outline-none transition"
+                    className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                   />
                 </div>
+              </div>
+
+              {/* Form Action Buttons: Cancel & Confirm (integrated inside card) */}
+              <div className="flex items-center gap-2.5 pt-3 border-t border-[var(--hyper-border-subtle)]">
+                <button
+                  type="button"
+                  onClick={handleBackRequest}
+                  disabled={loading}
+                  className="w-1/3 h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-xs sm:text-sm transition cursor-pointer select-none"
+                >
+                  {isBn ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-2/3 h-10 rounded-xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-xs sm:text-sm shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
+                >
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
+                  <span>
+                    {loading
+                      ? isBn
+                        ? 'সংরক্ষণ হচ্ছে...'
+                        : 'Saving...'
+                      : isBn
+                      ? 'নতুন খরচ নিশ্চিত করুন'
+                      : 'Confirm New Expense'}
+                  </span>
+                </button>
               </div>
             </form>
           </div>
         )}
       </main>
-
-      {/* ===================================================================== */}
-      {/* Sticky Bottom Action Footer (Mobile & Desktop)                        */}
-      {/* ===================================================================== */}
-      {!successInfo && (
-        <footer className="fixed bottom-0 inset-x-0 z-40 hyper-glass-nav border-t border-[var(--hyper-border-subtle)] px-4 py-3 sm:py-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <div className="max-w-2xl mx-auto flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleBackRequest}
-              disabled={loading}
-              className="w-1/3 py-3 rounded-2xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-xs sm:text-sm transition cursor-pointer select-none"
-            >
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              form="add-expense-form"
-              disabled={loading}
-              className="w-2/3 py-3 rounded-2xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-xs sm:text-sm shadow-md shadow-[#F28A24]/25 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
-            >
-              {loading && <Loader2 className="w-4 h-4 animate-spin text-white" />}
-              <span>
-                {loading
-                  ? isBn
-                    ? 'সংরক্ষণ হচ্ছে...'
-                    : 'Saving...'
-                  : isBn
-                  ? 'নতুন খরচ নিশ্চিত করুন'
-                  : 'Confirm New Expense'}
-              </span>
-            </button>
-          </div>
-        </footer>
-      )}
 
       {/* ===================================================================== */}
       {/* Unsaved Changes Confirmation Dialog (Destructive Nav Guard Only)      */}
@@ -498,7 +574,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                 type="button"
                 onClick={() => {
                   setShowDiscardConfirm(false);
-                  onBack();
+                  forceBack();
                 }}
                 className="flex-1 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition cursor-pointer"
               >
@@ -508,8 +584,13 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
           </div>
         </div>
       )}
+
+      {/* ===================================================================== */}
+      {/* Category selection is managed globally by FrostedGlassSelect         */}
+      {/* ===================================================================== */}
     </div>
   );
 };
 
 export default AddExpensePage;
+

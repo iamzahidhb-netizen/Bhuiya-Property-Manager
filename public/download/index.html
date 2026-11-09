@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>আনোয়ার ভূঁইয়া প্রপার্টি - Android APK ডাউনলোড</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#1685E8" />
+  <style>
+    :root {
+      --primary: #1685E8;
+      --primary-dark: #0D66B8;
+      --accent: #22B84A;
+      --bg: #F5F7FA;
+      --card: rgba(255, 255, 255, 0.85);
+      --card-border: rgba(0, 0, 0, 0.08);
+      --text: #1C1D1F;
+      --text-sub: #65676B;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121316;
+        --card: rgba(30, 32, 38, 0.88);
+        --card-border: rgba(255, 255, 255, 0.1);
+        --text: #F5F6F8;
+        --text-sub: #9E A2A8;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(22, 133, 232, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(34, 184, 74, 0.08) 0%, transparent 40%);
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--card-border);
+      border-radius: 28px;
+      padding: 2rem 1.5rem;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+      text-align: center;
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo-box {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 1.25rem;
+      border-radius: 24px;
+      background: #FFFFFF;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+    .logo-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      font-size: 0.825rem;
+      color: var(--text-sub);
+      margin-bottom: 1.25rem;
+    }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.4rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge {
+      font-size: 0.725rem;
+      font-weight: 700;
+      padding: 0.3rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(22, 133, 232, 0.1);
+      color: var(--primary);
+    }
+    .badge-success {
+      background: rgba(34, 184, 74, 0.12);
+      color: #22B84A;
+    }
+    .badge-neutral {
+      background: rgba(120, 120, 128, 0.12);
+      color: var(--text-sub);
+    }
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #1685E8 0%, #0D66B8 100%);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1.05rem;
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(22, 133, 232, 0.35);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-download:active {
+      transform: scale(0.98);
+      box-shadow: 0 4px 12px rgba(22, 133, 232, 0.25);
+    }
+    .btn-download svg {
+      width: 22px;
+      height: 22px;
+    }
+    .file-info {
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      margin-top: 0.75rem;
+    }
+    .card-section {
+      text-align: left;
+      background: rgba(128, 128, 128, 0.06);
+      border-radius: 18px;
+      padding: 1.1rem;
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+    }
+    .card-section h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .card-section ul {
+      list-style: none;
+      padding: 0;
+    }
+    .card-section li {
+      margin-bottom: 0.45rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      line-height: 1.35;
+      color: var(--text);
+    }
+    .card-section li:last-child {
+      margin-bottom: 0;
+    }
+    .step-num {
+      background: var(--primary);
+      color: white;
+      font-size: 0.65rem;
+      font-weight: bold;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .bullet {
+      color: var(--accent);
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .footer-links {
+      margin-top: 1.5rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.25rem;
+      font-size: 0.78rem;
+    }
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-box">
+      <img src="/brand/splash-stage3-full.png" alt="Anwar Bhuiyan Property" onerror="this.src='/favicon.svg'" />
+    </div>
+
+    <h1>আনোয়ার ভূঁইয়া প্রপার্টি</h1>
+    <p class="subtitle">অফিসিয়াল অ্যান্ড্রয়েড মোবাইল অ্যাপ্লিকেশন</p>
+
+    <div class="badges">
+      <span class="badge badge-success">v1.0.4 (Build 5)</span>
+      <span class="badge">সাইজ: ১২.৭৫ MB</span>
+      <span class="badge badge-neutral">৯ নভেম্বর ২০২৬ (লেটেস্ট)</span>
+    </div>
+
+    <a href="/bhuiya-property-manager.apk" download="bhuiya-property-manager.apk" class="btn-download" id="downloadBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>APK ডাউনলোড করুন</span>
+    </a>
+
+    <p class="file-info">
+      ফাইল: <strong>bhuiya-property-manager.apk</strong> (com.bhuiyan.property)
+    </p>
+
+    <!-- নতুন সুবিধাসমূহ -->
+    <div class="card-section">
+      <h3>✨ নতুন যা যুক্ত হয়েছে:</h3>
+      <ul>
+        <li><span class="bullet">✓</span> <span><strong>প্রোফাইল ছবি পরিবর্তন ও যুক্তকরণ:</strong> মোবাইল গ্যালারি/ক্যামেরা থেকে প্রোফাইল ছবি আপলোড, অটো ক্রপ ও লাইভ প্রিভিউ।</span></li>
+        <li><span class="bullet">✓</span> <span><strong>কম্প্যাক্ট ২-কলাম মোবাইল লেআউট:</strong> খরচ যুক্ত ও ভাড়া আদায় স্ক্রিন এখন মোবাইল স্ক্রিনে এক নজরে স্পষ্ট।</span></li>
+        <li><span class="bullet">✓</span> <span><strong>ব্র্যান্ড স্প্ল্যাশ অ্যানিমেশন:</strong> ইউটিউবের মতো মসৃণ লোগো ওপেনিং এনিমেশন।</span></li>
+        <li><span class="bullet">✓</span> <span><strong>Xiaomi HyperOS ডিজাইন:</strong> লিকুইড ফ্রস্টেড গ্লাস, নোটিফিকেশন বার সেফ-এরিয়া ও ডার্ক মোড কালার ফিক্স।</span></li>
+        <li><span class="bullet">✓</span> <span><strong>অ্যান্ড্রয়েড ব্যাক জেসচার সাপোর্ট:</strong> হার্ডওয়্যার ও সোয়াইপ ব্যাক নেভিগেশন।</span></li>
+      </ul>
+    </div>
+
+    <!-- ইনস্টল করার নিয়ম -->
+    <div class="card-section">
+      <h3>📲 ইনস্টলেশন নির্দেশিকা:</h3>
+      <ul>
+        <li>
+          <span class="step-num">১</span>
+          <span>উপরের <strong>'APK ডাউনলোড করুন'</strong> বাটনে ট্যাপ করুন।</span>
+        </li>
+        <li>
+          <span class="step-num">২</span>
+          <span>ডাউনলোড শেষ হলে নোটিফিকেশন বার অথবা মোবাইলের <strong>Downloads</strong> ফোল্ডার থেকে ফাইলটি খুলুন।</span>
+        </li>
+        <li>
+          <span class="step-num">৩</span>
+          <span>যদি <em>"Install unknown apps"</em> সতর্কতা আসে, তবে Settings এ গিয়ে <strong>Allow from this source</strong> চালু করে <strong>Install</strong> সম্পন্ন করুন।</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="footer-links">
+      <a href="/">🌐 ওয়েব ড্যাশবোর্ড খুলুন</a>
+      <a href="/bhuiya-property-manager.apk" download>⚡ সরাসরি লিঙ্ক</a>
+    </div>
+  </div>
+
+  <script>
+    // Auto download if ?auto=1 or ?download=1
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auto') === '1' || urlParams.get('download') === '1') {
+      window.location.href = '/bhuiya-property-manager.apk';
+    }
+  </script>
+</body>
+</html>

@@ -90,7 +90,13 @@ export function getWorkerConfig(env = {}) {
   const allowedOrigins = env.ALLOWED_ORIGINS
     ? env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
     : [
+        'https://iamzahid.pages.dev',
         'https://bhuiya-property-manager.pages.dev',
+        'https://bhuiya-property-staging.pages.dev',
+        'https://localhost',
+        'capacitor://localhost',
+        'http://localhost',
+        'ionic://localhost',
         'http://localhost:5173',
         'http://127.0.0.1:5173',
         'http://localhost:5000',

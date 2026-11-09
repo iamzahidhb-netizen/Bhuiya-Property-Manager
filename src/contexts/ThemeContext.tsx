@@ -1,5 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -50,7 +52,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Update mobile browser status bar color
       const metaThemeColor = document.querySelector('meta[name="theme-color"]');
       if (metaThemeColor) {
-        metaThemeColor.setAttribute('content', activeResolved === 'dark' ? '#000000' : '#F2F3F5');
+        metaThemeColor.setAttribute('content', activeResolved === 'dark' ? '#121214' : '#F2F3F5');
+      }
+
+      // Synchronize native Capacitor Android status bar immediately
+      if (Capacitor.isNativePlatform()) {
+        if (activeResolved === 'dark') {
+          StatusBar.setBackgroundColor({ color: '#121214' }).catch(() => {});
+          StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+        } else {
+          StatusBar.setBackgroundColor({ color: '#FFFFFF' }).catch(() => {});
+          StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+        }
       }
     }
 

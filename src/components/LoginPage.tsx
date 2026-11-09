@@ -94,7 +94,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center ambient-emerald-bg px-4 py-8 relative overflow-hidden antialiased">
+    <div className="min-h-screen flex flex-col items-center justify-start sm:justify-center ambient-emerald-bg px-4 py-3 sm:py-8 relative overflow-y-auto antialiased">
       {/* Dynamic Ambient Background Highlights for real refraction bending */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div className="absolute top-10 right-1/4 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl" />
@@ -116,10 +116,10 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="relative w-full max-w-md z-10">
+      <div className="relative w-full max-w-md z-10 my-auto py-2 sm:py-4 pb-24 sm:pb-6">
         {/* Apple-style Liquid Glass Card with real refraction */}
         <LiquidGlass
-          className="p-8 sm:p-10 border border-white/60 shadow-2xl relative overflow-hidden"
+          className="p-5 sm:p-10 border border-white/60 shadow-2xl relative overflow-hidden rounded-3xl"
           scale={-120}
           chroma={7}
           blur={10}
@@ -138,41 +138,41 @@ export default function LoginPage() {
           </div>
 
           {/* Language Selector Header */}
-          <div className="flex justify-end mb-4 relative z-10">
+          <div className="flex justify-end mb-2 sm:mb-4 relative z-10">
             <LanguageSelector compact />
           </div>
 
           {/* Header & Official Branding */}
-          <div className="text-center mb-7 relative z-10">
+          <div className="text-center mb-4 sm:mb-7 relative z-10">
             {/* Official AB Logo */}
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-white p-2 shadow-lg shadow-emerald-700/15 border border-emerald-100 flex items-center justify-center mb-4 overflow-hidden">
+            <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-white p-1.5 sm:p-2 shadow-lg shadow-emerald-700/15 border border-emerald-100 flex items-center justify-center mb-2 sm:mb-4 overflow-hidden">
               <img
                 src="/brand/anwar-bhuiyan-property.svg"
                 alt="Anwar Bhuiyan Property Logo"
                 className="w-full h-full object-contain"
               />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {isBengali ? 'আনোয়ার ভূঁইয়া প্রপার্টি' : 'Anwar Bhuiyan Property'}
             </h1>
-            <p className="mt-1 text-sm font-semibold text-emerald-800">
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm font-semibold text-emerald-800">
               {t('app.tagline')}
             </p>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
               {isBengali ? 'ভূঁইয়া পরিবার প্রপার্টি ও ডিজিটাল খাতা' : 'Property & Family Finance Management'}
             </p>
           </div>
 
           {/* Error message */}
           {error && (
-            <div className="mb-5 rounded-2xl bg-red-50/90 backdrop-blur-md border border-red-200 px-4 py-3 text-sm text-red-700 flex items-start gap-2.5 shadow-xs">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+            <div className="mb-4 sm:mb-5 rounded-2xl bg-red-50/90 backdrop-blur-md border border-red-200 px-3.5 py-2.5 text-xs sm:text-sm text-red-700 flex items-start gap-2.5 shadow-xs">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-3 sm:space-y-4">
             {/* Email field */}
             <div>
               <label
@@ -187,9 +187,14 @@ export default function LoginPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onFocus={(e) => {
+                  setTimeout(() => {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 200);
+                }}
                 placeholder="zahid@bhuiyan.com"
                 disabled={loading}
-                className="w-full rounded-xl border border-slate-300/80 bg-white/80 backdrop-blur-xs px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
+                className="w-full rounded-xl border border-slate-300/80 bg-white/80 backdrop-blur-xs px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
               />
             </div>
 
@@ -208,9 +213,14 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={(e) => {
+                    setTimeout(() => {
+                      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 200);
+                  }}
                   placeholder="••••••••"
                   disabled={loading}
-                  className="w-full rounded-xl border border-slate-300/80 bg-white/80 backdrop-blur-xs px-4 py-2.5 pr-11 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white/80 backdrop-blur-xs px-3.5 py-2.5 pr-11 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
                 />
                 <button
                   type="button"

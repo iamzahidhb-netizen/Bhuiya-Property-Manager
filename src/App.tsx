@@ -1,35 +1,44 @@
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { NavigationProvider } from './contexts/NavigationContext';
 import LoginPage from './components/LoginPage';
 import AdminDashboard from './components/AdminDashboard';
 import LoadingScreen from './components/LoadingScreen';
 import AccessRestrictedScreen from './components/AccessRestrictedScreen';
 import { OfflineStatusBanner } from './components/common/OfflineStatusBanner';
 import { HyperOSComponentShowcase } from './components/ui/hyperos/HyperOSComponentShowcase';
+import AppOpeningSplash from './components/splash/AppOpeningSplash';
 
 function AppRouter() {
   const { user, loading: authLoading } = useAuth();
   const { membership, loading: workspaceLoading, error: workspaceError, retryMembershipLookup } = useWorkspace();
+  const [showSplash, setShowSplash] = useState(true);
 
   // Dev-only Preview Mode for Xiaomi HyperOS Component Showcase (stripped in production builds)
   if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.search.includes('preview=hyperos')) {
     return <HyperOSComponentShowcase />;
   }
 
-  // Show loading screen while Firebase verifies auth state OR while workspace membership loads
+  // 1. YouTube-style Opening Brand Reveal Animation on Cold Start
+  if (showSplash) {
+    return <AppOpeningSplash onFinish={() => setShowSplash(false)} />;
+  }
+
+  // 2. Show loading screen while Firebase verifies auth state OR while workspace membership loads
   if (authLoading || (user && workspaceLoading)) {
     return <LoadingScreen />;
   }
 
-  // If unauthenticated, redirect to Login Page
+  // 3. If unauthenticated, redirect to Login Page
   if (!user) {
     return <LoginPage />;
   }
 
-  // If user is authenticated but has no valid active membership in Firestore, show AccessRestrictedScreen
+  // 4. If user is authenticated but has no valid active membership in Firestore, show AccessRestrictedScreen
   if (!membership || membership.status !== 'active') {
     return (
       <AccessRestrictedScreen
@@ -40,7 +49,7 @@ function AppRouter() {
     );
   }
 
-  // Render protected Admin Dashboard only when valid active membership is confirmed
+  // 5. Render protected Admin Dashboard only when valid active membership is confirmed
   return <AdminDashboard />;
 }
 
@@ -51,8 +60,10 @@ export default function App() {
         <LanguageProvider>
           <WorkspaceProvider>
             <SettingsProvider>
-              <OfflineStatusBanner />
-              <AppRouter />
+              <NavigationProvider>
+                <OfflineStatusBanner />
+                <AppRouter />
+              </NavigationProvider>
             </SettingsProvider>
           </WorkspaceProvider>
         </LanguageProvider>

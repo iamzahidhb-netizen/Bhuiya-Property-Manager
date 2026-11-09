@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { type AppSettings, DEFAULT_SETTINGS } from '../types/settings';
+import { type AppSettings, DEFAULT_SETTINGS, DEFAULT_ANIMATION_SETTINGS } from '../types/settings';
 import { useWorkspace } from './WorkspaceContext';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
@@ -34,6 +34,10 @@ function sanitizeSettings(raw: unknown): AppSettings {
     appearance: {
       ...DEFAULT_SETTINGS.appearance,
       ...(s.appearance || {}),
+      navigationAnimation: {
+        ...DEFAULT_ANIMATION_SETTINGS,
+        ...(s.appearance?.navigationAnimation || {}),
+      },
     },
     dashboard: {
       sections: Array.isArray(s.dashboard?.sections)
@@ -135,6 +139,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           appearance: {
             ...prev.appearance,
             ...(newPartialSettings.appearance || {}),
+            navigationAnimation: {
+              ...(prev.appearance?.navigationAnimation || DEFAULT_ANIMATION_SETTINGS),
+              ...((newPartialSettings.appearance?.navigationAnimation) || {}),
+            },
           },
           dashboard: {
             ...prev.dashboard,

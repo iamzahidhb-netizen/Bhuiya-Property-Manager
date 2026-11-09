@@ -61,6 +61,24 @@ export interface ExpenseCategoryConfig {
   order: number;
 }
 
+export type PageTransitionStyle = 'default' | 'roll' | 'cube' | 'flip' | 'card';
+export type AnimationSpeed = 'slow' | 'normal' | 'fast';
+export type NavbarAnimationStyle = 'smooth-indicator' | 'scale' | 'slide';
+
+export interface NavigationAnimationSettings {
+  pageTransition: PageTransitionStyle;
+  speed: AnimationSpeed;
+  navbarAnimation: NavbarAnimationStyle;
+  reducedMotion: boolean;
+}
+
+export const DEFAULT_ANIMATION_SETTINGS: NavigationAnimationSettings = {
+  pageTransition: 'default',
+  speed: 'normal',
+  navbarAnimation: 'smooth-indicator',
+  reducedMotion: false,
+};
+
 export interface AppSettings {
   languageRegion: {
     language: AppLanguage;
@@ -74,6 +92,7 @@ export interface AppSettings {
     accentColor: AccentColor;
     cardStyle: 'glass' | 'solid';
     layoutDensity: 'comfortable' | 'compact';
+    navigationAnimation: NavigationAnimationSettings;
   };
   dashboard: {
     sections: DashboardSectionConfig[];
@@ -119,6 +138,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     accentColor: 'green',
     cardStyle: 'glass',
     layoutDensity: 'comfortable',
+    navigationAnimation: DEFAULT_ANIMATION_SETTINGS,
   },
   dashboard: {
     sections: [

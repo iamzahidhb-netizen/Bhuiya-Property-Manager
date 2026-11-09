@@ -10,7 +10,7 @@
  *    stale writes, and double-counting without authoritative server verification.
  */
 
-const CACHE_NAME = 'bhuiya-property-manager-v1';
+const CACHE_NAME = 'bhuiya-property-manager-v5-hyperos';
 
 const STATIC_SHELL_ASSETS = [
   '/',

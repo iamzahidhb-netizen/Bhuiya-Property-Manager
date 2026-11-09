@@ -14,13 +14,60 @@
 import { ACTION_PERMISSIONS } from './workspaceAuth.mjs';
 
 export const DEFAULT_ALLOWED_ORIGINS = [
+  'https://iamzahid.pages.dev',
   'https://bhuiya-property-manager.pages.dev',
   'https://bhuiya-property-staging.pages.dev',
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5000',
   'http://127.0.0.1:5000'
 ];
+
+/**
+ * Validates if an Origin is permitted under strict security policies.
+ * Accepts:
+ * - Configured origins list (env or options)
+ * - Default allowed origins list
+ * - Mobile app runtimes (Capacitor / Ionic: https://localhost, capacitor://localhost)
+ * - Local development ports (localhost / 127.0.0.1)
+ * - Cloudflare Pages staging / production subdomains (*.pages.dev)
+ */
+export function isOriginAllowed(origin, configuredOrigins = []) {
+  if (!origin || typeof origin !== 'string') return false;
+
+  const targetOrigin = origin.trim();
+
+  // 1. Direct match in configured origins
+  if (configuredOrigins && configuredOrigins.includes(targetOrigin)) return true;
+
+  // 2. Direct match in default origins
+  if (DEFAULT_ALLOWED_ORIGINS.includes(targetOrigin)) return true;
+
+  // 3. Capacitor / Ionic mobile application origins
+  if (
+    targetOrigin === 'https://localhost' ||
+    targetOrigin === 'http://localhost' ||
+    targetOrigin === 'capacitor://localhost' ||
+    targetOrigin === 'ionic://localhost'
+  ) {
+    return true;
+  }
+
+  // 4. Local development servers on any port (localhost / 127.0.0.1)
+  if (/^https?:\/\/localhost(:[0-9]+)?$/.test(targetOrigin)) return true;
+  if (/^https?:\/\/127\.0\.0\.1(:[0-9]+)?$/.test(targetOrigin)) return true;
+
+  // 5. Cloudflare Pages staging / production preview branches (*.pages.dev)
+  if (/^https:\/\/[a-z0-9-]+\.iamzahid\.pages\.dev$/.test(targetOrigin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.bhuiya-property-staging\.pages\.dev$/.test(targetOrigin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.bhuiya-property-manager\.pages\.dev$/.test(targetOrigin)) return true;
+
+  return false;
+}
 
 /**
  * Safely normalizes and validates an API action name
@@ -119,16 +166,20 @@ export function errorResponse(code, message, status = 400, extraHeaders = {}) {
  * Factory for Cloudflare Pages Advanced Mode Worker
  */
 export function createPagesWorker(apiHandler, options = {}) {
-  const allowedOrigins = options.allowedOrigins || DEFAULT_ALLOWED_ORIGINS;
-
   return {
     async fetch(request, env = {}, ctx = {}) {
       const url = new URL(request.url);
       const origin = request.headers.get('Origin');
 
+      // Dynamically resolve configured origins from env and options
+      const envAllowedOrigins = env?.ALLOWED_ORIGINS
+        ? env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+      const configuredOrigins = options.allowedOrigins || (envAllowedOrigins.length > 0 ? envAllowedOrigins : DEFAULT_ALLOWED_ORIGINS);
+
       // Resolve CORS origin header
       const corsHeaders = {};
-      if (origin && allowedOrigins.includes(origin)) {
+      if (origin && isOriginAllowed(origin, configuredOrigins)) {
         corsHeaders['Access-Control-Allow-Origin'] = origin;
         corsHeaders['Access-Control-Allow-Credentials'] = 'true';
         corsHeaders['Vary'] = 'Origin';

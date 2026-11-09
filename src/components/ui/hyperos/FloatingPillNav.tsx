@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { House, BookOpen, ReceiptText, Wallet, UserRound } from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSettings } from '../../../contexts/SettingsContext';
-import type { NavItemConfig } from '../../../types/settings';
+import { type NavItemConfig, DEFAULT_ANIMATION_SETTINGS } from '../../../types/settings';
 
 export type MainNavSection = 'home' | 'accounts' | 'profile' | 'settings' | 'rent-deposit' | 'add-expense';
 
@@ -19,7 +19,10 @@ export interface FloatingPillNavProps {
 
 /**
  * FloatingPillNav: Xiaomi HyperOS inspired floating frosted glass bottom navigation pill.
- * Fully integrates with centralized Settings Navigation Manager.
+ * Supports customizable Navbar Animation Styles:
+ * 1. Smooth Indicator – Active indicator slides smoothly between items.
+ * 2. Scale – Active icon gently scales up.
+ * 3. Slide – Active icon and label transition smoothly.
  */
 export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
   activeSection,
@@ -32,20 +35,17 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
   className = '',
 }) => {
   const { t, currentLanguage } = useLanguage();
-  let configuredNavItems: NavItemConfig[] | undefined;
-
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { settings } = useSettings();
-    configuredNavItems = settings?.navigation?.items;
-  } catch {
-    // Fallback if rendered outside SettingsProvider
-  }
+  const { settings } = useSettings();
+  const configuredNavItems = settings?.navigation?.items;
+  const navbarStyle = settings?.appearance?.navigationAnimation?.navbarAnimation || DEFAULT_ANIMATION_SETTINGS.navbarAnimation;
+  const animSpeed = settings?.appearance?.navigationAnimation?.speed || DEFAULT_ANIMATION_SETTINGS.speed;
 
   const isBn = currentLanguage === 'bn';
   const isHomeActive = activeSection === 'home' && !drillDownView;
   const isAccountsActive = activeSection === 'accounts' && !drillDownView;
   const isProfileActive = activeSection === 'profile' && !drillDownView;
+  const isNewExpenseActive = activeSection === 'add-expense' && !drillDownView;
+  const isRentDepositActive = activeSection === 'rent-deposit' && !drillDownView;
 
   // Default item list if not configured
   const defaultItems: NavItemConfig[] = [
@@ -65,6 +65,67 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
     ? itemsToRender
     : defaultItems.filter((i) => i.id === 'profile' || i.id === 'home');
 
+  // Compute active item index & color for smooth indicator
+  const { activeIndex, activeColor } = useMemo(() => {
+    if (isHomeActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'home'),
+        activeColor: '#22B84A',
+      };
+    }
+    if (isAccountsActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'accounts'),
+        activeColor: '#1685E8',
+      };
+    }
+    if (isNewExpenseActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'newExpense'),
+        activeColor: '#F28A24',
+      };
+    }
+    if (isRentDepositActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'rentDeposit'),
+        activeColor: '#22B84A',
+      };
+    }
+    if (isProfileActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'profile'),
+        activeColor: '#7655E8',
+      };
+    }
+    return { activeIndex: -1, activeColor: '#22B84A' };
+  }, [finalItems, isHomeActive, isAccountsActive, isNewExpenseActive, isRentDepositActive, isProfileActive]);
+
+  const speedClass = useMemo(() => {
+    switch (animSpeed) {
+      case 'slow':
+        return 'hyper-speed-slow';
+      case 'fast':
+        return 'hyper-speed-fast';
+      case 'normal':
+      default:
+        return 'hyper-speed-normal';
+    }
+  }, [animSpeed]);
+
+  const getItemClass = (isActive: boolean, activeBgClass: string) => {
+    if (!isActive) {
+      return 'hyper-nav-item hyper-nav-inactive text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 relative z-10';
+    }
+    if (navbarStyle === 'smooth-indicator') {
+      return 'hyper-nav-item text-white font-bold relative z-10 transition-colors duration-200';
+    }
+    if (navbarStyle === 'scale') {
+      return `hyper-nav-item ${activeBgClass} text-white shadow-md font-bold hyper-nav-scale-active relative z-10`;
+    }
+    // 'slide' style
+    return `hyper-nav-item ${activeBgClass} text-white font-bold hyper-nav-slide-active relative z-10`;
+  };
+
   const renderNavItem = (item: NavItemConfig) => {
     switch (item.id) {
       case 'home':
@@ -76,14 +137,13 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             aria-label={t('navigation.ariaHome')}
             aria-current={isHomeActive ? 'page' : undefined}
             onClick={() => onSelectSection('home')}
-            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full transition-all duration-150 select-none cursor-pointer group min-w-0 ${
-              isHomeActive
-                ? 'bg-[#22B84A] text-white shadow-md shadow-[#22B84A]/30 font-bold'
-                : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95'
-            }`}
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
+              isHomeActive,
+              'bg-[#22B84A] shadow-[#22B84A]/30'
+            )}`}
           >
             <House
-              className="w-5 h-5 shrink-0 transition-transform duration-150 group-active:scale-90"
+              className="w-5 h-5 shrink-0 group-active:scale-90"
               strokeWidth={isHomeActive ? 2.4 : 2}
               aria-hidden="true"
             />
@@ -102,14 +162,13 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             aria-label={t('navigation.ariaAccounts')}
             aria-current={isAccountsActive ? 'page' : undefined}
             onClick={() => onSelectSection('accounts')}
-            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full transition-all duration-150 select-none cursor-pointer group min-w-0 ${
-              isAccountsActive
-                ? 'bg-[#1685E8] text-white shadow-md shadow-[#1685E8]/30 font-bold'
-                : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95'
-            }`}
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
+              isAccountsActive,
+              'bg-[#1685E8] shadow-[#1685E8]/30'
+            )}`}
           >
             <BookOpen
-              className="w-5 h-5 shrink-0 transition-transform duration-150 group-active:scale-90"
+              className="w-5 h-5 shrink-0 group-active:scale-90"
               strokeWidth={isAccountsActive ? 2.4 : 2}
               aria-hidden="true"
             />
@@ -126,21 +185,27 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             type="button"
             data-nav-item="new-expense"
             aria-label={t('navigation.ariaNewExpense')}
+            aria-current={isNewExpenseActive ? 'page' : undefined}
             title={canCreateExpense ? t('navigation.newExpenseTooltip') : t('navigation.newExpenseDenied')}
             disabled={!canCreateExpense}
             onClick={onOpenNewExpense}
-            className="relative flex flex-col items-center justify-center py-2 px-1 rounded-full text-[#F28A24] hover:bg-[#F28A24]/10 active:scale-95 transition-all duration-150 select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed ${getItemClass(
+              isNewExpenseActive,
+              'bg-[#F28A24] shadow-[#F28A24]/30'
+            )}`}
           >
             <div className="relative flex items-center justify-center">
               <ReceiptText
-                className="w-5 h-5 shrink-0 transition-transform duration-150 group-active:scale-90"
-                strokeWidth={2}
+                className="w-5 h-5 shrink-0 group-active:scale-90"
+                strokeWidth={isNewExpenseActive ? 2.4 : 2}
                 aria-hidden="true"
               />
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#F28A24] rounded-full border border-white dark:border-[#1c1c1e]"
-                aria-hidden="true"
-              />
+              {!isNewExpenseActive && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#F28A24] rounded-full border border-white dark:border-[#1c1c1e]"
+                  aria-hidden="true"
+                />
+              )}
             </div>
             <span className="text-[10px] sm:text-[11px] leading-tight tracking-tight mt-0.5 truncate max-w-full font-semibold">
               {isBn ? item.labelBn : item.labelEn}
@@ -155,21 +220,27 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             type="button"
             data-nav-item="rent-deposit"
             aria-label={t('navigation.ariaRentDeposit')}
+            aria-current={isRentDepositActive ? 'page' : undefined}
             title={canCollectRent ? t('navigation.rentDepositTooltip') : t('navigation.rentDepositDenied')}
             disabled={!canCollectRent}
             onClick={onOpenRentPayment}
-            className="relative flex flex-col items-center justify-center py-2 px-1 rounded-full text-[#22B84A] hover:bg-[#22B84A]/10 active:scale-95 transition-all duration-150 select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed ${getItemClass(
+              isRentDepositActive,
+              'bg-[#22B84A] shadow-[#22B84A]/30'
+            )}`}
           >
             <div className="relative flex items-center justify-center">
               <Wallet
-                className="w-5 h-5 shrink-0 transition-transform duration-150 group-active:scale-90"
-                strokeWidth={2}
+                className="w-5 h-5 shrink-0 group-active:scale-90"
+                strokeWidth={isRentDepositActive ? 2.4 : 2}
                 aria-hidden="true"
               />
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#22B84A] rounded-full border border-white dark:border-[#1c1c1e]"
-                aria-hidden="true"
-              />
+              {!isRentDepositActive && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#22B84A] rounded-full border border-white dark:border-[#1c1c1e]"
+                  aria-hidden="true"
+                />
+              )}
             </div>
             <span className="text-[10px] sm:text-[11px] leading-tight tracking-tight mt-0.5 truncate max-w-full font-semibold">
               {isBn ? item.labelBn : item.labelEn}
@@ -186,14 +257,13 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             aria-label={t('navigation.ariaProfile')}
             aria-current={isProfileActive ? 'page' : undefined}
             onClick={() => onSelectSection('profile')}
-            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full transition-all duration-150 select-none cursor-pointer group min-w-0 ${
-              isProfileActive
-                ? 'bg-[#7655E8] text-white shadow-md shadow-[#7655E8]/30 font-bold'
-                : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95'
-            }`}
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
+              isProfileActive,
+              'bg-[#7655E8] shadow-[#7655E8]/30'
+            )}`}
           >
             <UserRound
-              className="w-5 h-5 shrink-0 transition-transform duration-150 group-active:scale-90"
+              className="w-5 h-5 shrink-0 group-active:scale-90"
               strokeWidth={isProfileActive ? 2.4 : 2}
               aria-hidden="true"
             />
@@ -210,16 +280,34 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
 
   return (
     <div
-      className={`fixed bottom-3 sm:bottom-6 inset-x-2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 w-[calc(100%-1rem)] sm:w-[480px] md:w-[500px] z-40 pointer-events-auto pb-[env(safe-area-inset-bottom)] ${className}`}
+      className={`fixed bottom-3 sm:bottom-6 inset-x-2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 w-[calc(100%-1rem)] sm:w-[480px] md:w-[500px] z-50 pointer-events-auto pb-[env(safe-area-inset-bottom)] ${speedClass} ${className}`}
       data-testid="hyperos-floating-pill-nav"
+      data-navbar-style={navbarStyle}
     >
       <nav
         aria-label={t('navigation.mainNavAria')}
-        className="hyper-glass-nav relative rounded-full border border-[var(--hyper-border-glass)] [box-shadow:var(--hyper-inner-highlight),var(--hyper-shadow-nav)] p-1.5 grid items-center gap-1 transition-all duration-200"
+        className={`hyper-glass-nav relative rounded-full border border-[var(--hyper-border-glass)] [box-shadow:var(--hyper-inner-highlight),var(--hyper-shadow-nav)] p-1.5 grid items-center gap-1 transition-all duration-200 ${
+          navbarStyle === 'slide' ? 'overflow-visible' : 'overflow-hidden'
+        }`}
         style={{
           gridTemplateColumns: `repeat(${finalItems.length}, minmax(0, 1fr))`,
         }}
       >
+        {/* Smooth Sliding Pill Indicator (Style 1) */}
+        {navbarStyle === 'smooth-indicator' && activeIndex >= 0 && (
+          <div
+            className="hyper-navbar-indicator-pill shadow-md"
+            style={{
+              width: `calc(${100 / finalItems.length}% - 4px)`,
+              left: '2px',
+              transform: `translateX(calc(${activeIndex * 100}% + ${activeIndex * 4}px))`,
+              backgroundColor: activeColor,
+              boxShadow: `0 4px 14px ${activeColor}40`,
+            }}
+            aria-hidden="true"
+          />
+        )}
+
         {finalItems.map(renderNavItem)}
       </nav>
     </div>

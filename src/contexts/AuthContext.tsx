@@ -16,23 +16,36 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  photoURL: string | null;
+  updatePhotoURL: (photo: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      if (firebaseUser?.uid) {
+        try {
+          const cached = localStorage.getItem(`abp_user_photo_${firebaseUser.uid}`);
+          setPhotoURL(cached || firebaseUser.photoURL || null);
+        } catch {
+          setPhotoURL(firebaseUser.photoURL || null);
+        }
+      } else {
+        setPhotoURL(null);
+      }
       console.log(
         '[Auth]',
         firebaseUser ? `Signed in as ${firebaseUser.email}` : 'Not signed in',
@@ -40,6 +53,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return unsubscribe;
   }, []);
+
+  // Listen to profile photo change events across components
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<string | null>;
+      setPhotoURL(custom.detail);
+    };
+    window.addEventListener('abp-profile-photo-changed', handler);
+    return () => window.removeEventListener('abp-profile-photo-changed', handler);
+  }, []);
+
+  async function updatePhotoURL(newPhoto: string | null) {
+    if (user?.uid) {
+      try {
+        if (newPhoto) {
+          localStorage.setItem(`abp_user_photo_${user.uid}`, newPhoto);
+        } else {
+          localStorage.removeItem(`abp_user_photo_${user.uid}`);
+        }
+      } catch (e) {
+        console.warn('[Auth] localStorage photo write error:', e);
+      }
+    }
+    setPhotoURL(newPhoto);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('abp-profile-photo-changed', { detail: newPhoto })
+      );
+    }
+  }
 
   async function login(email: string, password: string, rememberMe: boolean) {
     const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
@@ -65,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, photoURL, updatePhotoURL }}>
       {children}
     </AuthContext.Provider>
   );

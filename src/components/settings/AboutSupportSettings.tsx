@@ -3,6 +3,7 @@ import {
   ShieldCheck,
   Smartphone,
   Heart,
+  Download,
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
@@ -53,15 +54,25 @@ export const AboutSupportSettings: React.FC<{ onBack: () => void }> = ({ onBack 
 
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#22B84A]/10 text-[#22B84A] border border-[#22B84A]/30">
-            v1.0.0-stable
+            v1.0.0-hyperos
           </span>
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-black/5 dark:bg-white/10 text-[var(--hyper-text-secondary)]">
-            Nov 8, 2026
+            Nov 9, 2026
           </span>
           <span className="px-3 py-1 rounded-full text-xs font-mono font-medium bg-black/5 dark:bg-white/10 text-[var(--hyper-text-secondary)]">
-            build: ab882075
+            Android APK
           </span>
         </div>
+
+        <a
+          href="/bhuiya-property-manager.apk"
+          download="bhuiya-property-manager.apk"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-[18px] bg-gradient-to-r from-[#1685E8] to-[#22B84A] text-white text-xs font-bold shadow-md hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <Download className="w-4 h-4" />
+          <span>{isBn ? 'নতুন Android APK ডাউনলোড করুন' : 'Download Latest Android APK'}</span>
+          <span className="text-[10px] opacity-85 font-mono">(~13 MB)</span>
+        </a>
       </HyperCard>
 
       {/* Design System & Specifications */}

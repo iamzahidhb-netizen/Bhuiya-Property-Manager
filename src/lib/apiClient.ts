@@ -49,7 +49,8 @@ export async function callCallable<TReq = unknown, TRes = unknown>(
   }
 
   const idToken = await user.getIdToken();
-  const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+  const rawApiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+  const apiBase = rawApiBase ? rawApiBase.replace(/\/+$/, '') : '';
   const url = `${apiBase}/api/callable/${actionName}`;
 
   const headers: Record<string, string> = {
@@ -72,11 +73,20 @@ export async function callCallable<TReq = unknown, TRes = unknown>(
     bodyPayload = { ...(bodyPayload as Record<string, unknown>), workspaceId: activeWorkspaceId };
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(bodyPayload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyPayload),
+    });
+  } catch (netErr) {
+    const rawMsg = netErr instanceof Error ? netErr.message : String(netErr);
+    throw new ApiClientError(
+      'unavailable',
+      `সার্ভারের সাথে সংযোগ স্থাপন করা সম্ভব হয়নি (${rawMsg})। দয়া করে ইন্টারনেট সংযোগ বা নেটওয়ার্ক চেক করুন।`
+    );
+  }
 
   let responseBody: {
     data?: TRes;

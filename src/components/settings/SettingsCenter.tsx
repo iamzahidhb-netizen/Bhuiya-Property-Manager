@@ -31,6 +31,9 @@ import { AboutSupportSettings } from './AboutSupportSettings';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useAppNavigation } from '../../contexts/NavigationContext';
+import { PageTransitionContainer } from '../ui/hyperos';
+import { DEFAULT_ANIMATION_SETTINGS } from '../../types/settings';
 
 export interface SettingsCenterProps {
   initialCategory?: SettingsCategoryId | null;
@@ -45,19 +48,30 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
   onOpenMemberManagement,
   className = '',
 }) => {
-  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId | null>(initialCategory);
+  const { settingsCategory, setSettingsCategory, goBack, direction } = useAppNavigation();
   const [sidebarSearch, setSidebarSearch] = useState('');
-  const { isSavedNoticeVisible } = useSettings();
+  const { settings, isSavedNoticeVisible } = useSettings();
+  const animSettings = settings?.appearance?.navigationAnimation || DEFAULT_ANIMATION_SETTINGS;
   const { currentLanguage } = useLanguage();
   const { isMasterAdmin } = useWorkspace();
+
+  // If initialCategory prop is passed on mount and not yet in nav state, set it
+  React.useEffect(() => {
+    if (initialCategory && !settingsCategory) {
+      setSettingsCategory(initialCategory);
+    }
+  }, [initialCategory, settingsCategory, setSettingsCategory]);
+
+  const activeCategory = settingsCategory !== undefined ? settingsCategory : initialCategory;
+  const handleBack = onBack || goBack;
 
   React.useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as { __setSettingsCategory?: (id: SettingsCategoryId | null) => void }).__setSettingsCategory = (id) => {
-        setActiveCategory(id);
+        setSettingsCategory(id);
       };
     }
-  }, []);
+  }, [setSettingsCategory]);
 
   const isBn = currentLanguage === 'bn';
   const categoryMap = new Map(SETTINGS_CATEGORIES.map((cat) => [cat.id, cat]));
@@ -77,7 +91,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
   });
 
   const renderActiveCategoryContent = (catId: SettingsCategoryId) => {
-    const handleSubBack = () => setActiveCategory(null);
+    const handleSubBack = () => goBack();
 
     switch (catId) {
       case 'language':
@@ -127,7 +141,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
         key={cat.id}
         type="button"
         data-sidebar-category={cat.id}
-        onClick={() => setActiveCategory(cat.id)}
+        onClick={() => setSettingsCategory(cat.id)}
         className={`w-full flex items-center justify-between p-2.5 rounded-2xl transition-all duration-150 text-left cursor-pointer group ${
           isSelected
             ? 'bg-[#22B84A]/10 text-[#22B84A] dark:text-[#2dd35b] font-bold shadow-xs border-l-4 border-[#22B84A]'
@@ -187,16 +201,14 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Back Arrow + App Title */}
           <div className="flex items-center gap-3">
-            {onBack && (
-              <button
-                type="button"
-                onClick={onBack}
-                aria-label={isBn ? 'প্রোফাইলে ফিরে যান' : 'Back to Profile'}
-                className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label={isBn ? 'প্রোফাইলে ফিরে যান' : 'Back to Profile'}
+              className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
@@ -205,7 +217,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
                 {isMasterAdmin && (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
                     <Shield className="w-3 h-3" />
-                    <span>{isBn ? 'মাস্টার এডমিন' : 'Master Admin'}</span>
+                    <span>{isBn ? 'মাস্টার Admin' : 'Master Admin'}</span>
                   </span>
                 )}
               </div>
@@ -218,15 +230,13 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
           </div>
 
           {/* Right: Quick Back Link */}
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-            >
-              {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleBack}
+            className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
+          >
+            {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+          </button>
         </div>
       </header>
 
@@ -284,7 +294,15 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
 
         {/* Right Content Panel: Active Settings View */}
         <main className="flex-1 min-w-0 bg-[var(--hyper-surface)] rounded-3xl p-6 border border-[var(--hyper-border-subtle)] shadow-xs">
-          {renderActiveCategoryContent(desktopActiveCategory)}
+          <PageTransitionContainer
+            transitionKey={`settings-${desktopActiveCategory}`}
+            direction={direction}
+            style={animSettings.pageTransition}
+            speed={animSettings.speed}
+            reducedMotion={animSettings.reducedMotion}
+          >
+            {renderActiveCategoryContent(desktopActiveCategory)}
+          </PageTransitionContainer>
         </main>
       </div>
 
@@ -292,21 +310,29 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
       {/* 2. MOBILE LAYOUT (< 768px, target 390 × 844): Full-Page Drill-Down   */}
       {/* ===================================================================== */}
       <div className="md:hidden flex-1 px-3 sm:px-4 py-4">
-        {/* Mobile View 1: Settings Home (Grouped Categories) */}
-        {activeCategory === null && (
-          <SettingsHome
-            onSelectCategory={(id) => setActiveCategory(id)}
-            onBack={onBack}
-            isMasterAdmin={Boolean(isMasterAdmin)}
-          />
-        )}
+        <PageTransitionContainer
+          transitionKey={activeCategory ? `settings-${activeCategory}` : 'settings-home'}
+          direction={direction}
+          style={animSettings.pageTransition}
+          speed={animSettings.speed}
+          reducedMotion={animSettings.reducedMotion}
+        >
+          {/* Mobile View 1: Settings Home (Grouped Categories) */}
+          {activeCategory === null && (
+            <SettingsHome
+              onSelectCategory={(id) => setSettingsCategory(id)}
+              onBack={handleBack}
+              isMasterAdmin={Boolean(isMasterAdmin)}
+            />
+          )}
 
-        {/* Mobile View 2: Dedicated Category Sub-Page with Back Navigation */}
-        {activeCategory !== null && (
-          <div className="space-y-4">
-            {renderActiveCategoryContent(activeCategory)}
-          </div>
-        )}
+          {/* Mobile View 2: Dedicated Category Sub-Page with Back Navigation */}
+          {activeCategory !== null && (
+            <div className="space-y-4">
+              {renderActiveCategoryContent(activeCategory)}
+            </div>
+          )}
+        </PageTransitionContainer>
       </div>
     </div>
   );

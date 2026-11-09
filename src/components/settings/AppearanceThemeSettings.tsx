@@ -1,17 +1,42 @@
 import React, { useState } from 'react';
-import { Palette, Sun, Moon, Laptop, Sparkles, Check, RefreshCw } from 'lucide-react';
+import { Palette, Sun, Moon, Laptop, Sparkles, Check, RefreshCw, Compass } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAppNavigation } from '../../contexts/NavigationContext';
 import type { AppTheme, AccentColor } from '../../types/settings';
+import { NavigationAnimationSettings } from './NavigationAnimationSettings';
 
-export const AppearanceThemeSettings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export interface AppearanceThemeSettingsProps {
+  onBack: () => void;
+  initialTab?: 'theme' | 'animation';
+}
+
+export const AppearanceThemeSettings: React.FC<AppearanceThemeSettingsProps> = ({
+  onBack,
+  initialTab = 'theme',
+}) => {
   const { settings, updateSettings } = useSettings();
   const { currentLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const { registerBackGuard } = useAppNavigation();
 
+  const [activeTab, setActiveTab] = useState<'theme' | 'animation'>(initialTab);
+
+  // Android & Browser Back Synchronization: When on animation tab, system/gesture back returns to theme tab
+  React.useEffect(() => {
+    if (activeTab === 'animation') {
+      return registerBackGuard({
+        id: 'appearance-animation-tab-guard',
+        isDirty: () => true,
+        onBlocked: () => {
+          setActiveTab('theme');
+        },
+      });
+    }
+  }, [activeTab, registerBackGuard]);
   const [selectedTheme, setSelectedTheme] = useState<AppTheme>(settings.appearance.theme || theme);
   const [accentColor, setAccentColor] = useState<AccentColor>(settings.appearance.accentColor || 'green');
   const [cardStyle, setCardStyle] = useState<'glass' | 'solid'>(settings.appearance.cardStyle || 'glass');
@@ -22,6 +47,7 @@ export const AppearanceThemeSettings: React.FC<{ onBack: () => void }> = ({ onBa
   function handleSave() {
     updateSettings({
       appearance: {
+        ...settings.appearance,
         theme: selectedTheme,
         accentColor,
         cardStyle,
@@ -46,6 +72,32 @@ export const AppearanceThemeSettings: React.FC<{ onBack: () => void }> = ({ onBa
     { id: 'purple', nameBn: 'রয়্যাল পার্পল', nameEn: 'Royal Purple', hex: '#7655E8', bgClass: 'bg-[#7655E8]' },
   ];
 
+  if (activeTab === 'animation') {
+    return (
+      <div className="space-y-4">
+        {/* Navigation Tabs Switcher */}
+        <div className="flex p-1 rounded-full bg-black/5 dark:bg-white/5 border border-[var(--hyper-border-subtle)] max-w-md">
+          <button
+            type="button"
+            onClick={() => setActiveTab('theme')}
+            className="flex-1 py-1.5 px-3 rounded-full text-xs font-semibold text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] transition cursor-pointer"
+          >
+            🎨 {isBn ? 'থিম ও কালার' : 'Theme & Colors'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('animation')}
+            className="flex-1 py-1.5 px-3 rounded-full text-xs font-bold bg-[#22B84A] text-white shadow-xs transition cursor-pointer"
+          >
+            🚀 {isBn ? 'নেভিগেশন ও অ্যানিমেশন' : 'Navigation & Animation'}
+          </button>
+        </div>
+
+        <NavigationAnimationSettings onBack={() => setActiveTab('theme')} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -62,6 +114,50 @@ export const AppearanceThemeSettings: React.FC<{ onBack: () => void }> = ({ onBa
           ← {isBn ? 'ফিরে যান' : 'Back'}
         </PillButton>
       </div>
+
+      {/* Navigation Tabs Switcher */}
+      <div className="flex p-1 rounded-full bg-black/5 dark:bg-white/5 border border-[var(--hyper-border-subtle)] max-w-md">
+        <button
+          type="button"
+          onClick={() => setActiveTab('theme')}
+          className="flex-1 py-1.5 px-3 rounded-full text-xs font-bold bg-[#22B84A] text-white shadow-xs transition cursor-pointer"
+        >
+          🎨 {isBn ? 'থিম ও কালার' : 'Theme & Colors'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('animation')}
+          data-tab-navigation-animation="true"
+          data-appearance-tab="navigation"
+          className="flex-1 py-1.5 px-3 rounded-full text-xs font-semibold text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] transition cursor-pointer"
+        >
+          🚀 {isBn ? 'নেভিগেশন ও অ্যানিমেশন' : 'Navigation & Animation'}
+        </button>
+      </div>
+
+      {/* Navigation & Animation Banner Shortcut Card */}
+      <HyperCard
+        variant="default"
+        clickable
+        onClick={() => setActiveTab('animation')}
+        className="p-3.5 border border-[#22B84A]/30 bg-[#22B84A]/[0.05] hover:bg-[#22B84A]/[0.08] transition-all flex items-center justify-between cursor-pointer"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#22B84A] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Compass className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-[var(--hyper-text-primary)] flex items-center gap-1.5">
+              <span>{isBn ? 'নেভিগেশন ও ট্রানজিশন অ্যানিমেশন' : 'Navigation & Transition Animations'}</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-[#22B84A] text-white">New</span>
+            </div>
+            <div className="text-[11px] text-[var(--hyper-text-secondary)]">
+              {isBn ? '৫টি পেজ ট্রানজিশন স্টাইল, স্পিড ও বটম বার মোশন পরিবর্তন করুন' : 'Configure 5 3D page transitions, speeds, and navbar motion'}
+            </div>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-[#22B84A]">→</span>
+      </HyperCard>
 
       {/* Theme Mode Card */}
       <HyperCard variant="default" className="p-4 sm:p-5 space-y-4">

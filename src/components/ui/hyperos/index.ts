@@ -5,3 +5,5 @@ export { GroupedList, GroupedListItem, type GroupedListProps, type GroupedListIt
 export { PillButton, type PillButtonProps, type PillButtonVariant } from './PillButton';
 export { FloatingPillNav, type FloatingPillNavProps } from './FloatingPillNav';
 export { ModalWrapper, type ModalWrapperProps } from './ModalWrapper';
+export { PageTransitionContainer, type PageTransitionContainerProps } from './PageTransitionContainer';
+export { FrostedGlassSelect, type FrostedGlassSelectProps, type FrostedGlassOption } from './FrostedGlassSelect';
