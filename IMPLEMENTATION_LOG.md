@@ -11,6 +11,15 @@
 - Added `poc/phase-10-2a/test-financial-integrity.mjs` and `npm run test:financial`.
 - No Firestore rules, authentication/role logic, schema, existing user data, or cloud resources were changed by this implementation.
 
+## 2026-11-11 — Staging Android build attempt
+
+- `npm.cmd run build` — passed; builds the web app in staging mode and packages the Worker (732,416 bytes).
+- `npx.cmd cap sync android` — passed; copied the staging web assets and synced the two Capacitor Android plugins.
+- `android/gradlew.bat assembleDebug` — blocked: sandbox denied access to the Gradle wrapper lock file under `C:\Users\Onty's zZz\.gradle\wrapper\dists\...`.
+- `adb devices` — failed to start the ADB daemon (`could not read ok from ADB Server`); no phone connection was verified.
+- An existing `android/app/build/outputs/apk/debug/app-debug.apk` (13,509,363 bytes; last written 2026-11-11 12:53 +06:00) predates this build attempt. It was not treated as the newly built APK and was not installed.
+- No APK install, phone data change, deployment, or live backend operation was performed.
+
 ### Baseline commands and results
 
 - `npm.cmd install` — passed; 30 advisories reported (22 moderate, 8 high); `esbuild` install script was blocked by the repository install-script allowlist.
