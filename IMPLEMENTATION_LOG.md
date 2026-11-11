@@ -20,6 +20,25 @@
 - An existing `android/app/build/outputs/apk/debug/app-debug.apk` (13,509,363 bytes; last written 2026-11-11 12:53 +06:00) predates this build attempt. It was not treated as the newly built APK and was not installed.
 - No APK install, phone data change, deployment, or live backend operation was performed.
 
+## 2026-11-11 — Shared Hisab, offline local atomicity, and PWA cache lifecycle
+
+- Extended `src/services/financialSummary.ts` with shared rent-bill, held-deposit, and cached rent-payment balance calculations. Rent management, tenant history, tenant deposits, and offline payment reconciliation now use these selectors and integer-poisha utilities.
+- Added `saveItemsAtomically` to IndexedDB and let the sync engine enqueue related records in the same transaction. An offline rent payment now persists its cached bill update, payment row, and sync queue row atomically.
+- Consolidated the legacy `banglaFormat.ts` API to delegate currency/month/digit formatting to `uiFormatters.ts`, preserving existing callers.
+- Updated `public/sw.js` to keep updates waiting until old controlled tabs close, scope cleanup to this app's cache prefix, refresh navigations network-first, cache fingerprinted assets, and leave IndexedDB untouched.
+- Added `npm run test:pwa-cache` alongside extended financial integrity checks.
+- `npm.cmd run test:financial` — passed, 19/19.
+- `npm.cmd run test:pwa-cache` — passed, 12/12 mocked Service Worker checks.
+- `npx.cmd tsc --noEmit` — passed.
+- `npm.cmd run lint` — passed.
+- `node poc/phase-10-2a/run-poc-tests.mjs` — passed, 101 assertions.
+- `node poc/phase-10-2a/test-offline-architecture.mjs` — passed, 8/8.
+- `node poc/phase-10-2a/run-remediation-tests.mjs` — passed, 62/62.
+- `npm.cmd run build` — passed in staging mode; Worker bundle 732,416 bytes.
+- `npx.cmd cap sync android` — passed with latest staging assets; native app ID, signing, permissions, and project structure were not modified.
+- Browser/device PWA verification, full user-interface visual testing, authenticated staging flows, and Android APK rebuild/install remain NOT RUN (environment/harness access unavailable).
+- Server-side idempotency remains open; no cloud calls or deployments were performed.
+
 ### Baseline commands and results
 
 - `npm.cmd install` — passed; 30 advisories reported (22 moderate, 8 high); `esbuild` install script was blocked by the repository install-script allowlist.
