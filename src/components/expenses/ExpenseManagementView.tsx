@@ -12,6 +12,8 @@ import {
   calculateOperatingSummary,
   EXPENSE_CATEGORY_LABELS,
 } from '../../services/expenseService';
+import { getExpenseBillingMonth } from '../../services/financialSummary';
+import { sumMoney } from '../../utils/money';
 import ExpenseModal from './ExpenseModal';
 import ExpenseDetailsModal from './ExpenseDetailsModal';
 
@@ -55,7 +57,6 @@ export default function ExpenseManagementView({
     const unsubExpenses = subscribeExpenses(
       ownerUid,
       {
-        billingMonth: selectedMonth || null,
         propertyId: selectedPropertyId !== 'all' ? selectedPropertyId : null,
       },
       (fetchedExpenses) => {
@@ -66,9 +67,7 @@ export default function ExpenseManagementView({
 
     const unsubPayments = subscribeRentPayments(
       ownerUid,
-      {
-        billingMonth: selectedMonth || null,
-      },
+      {},
       (fetchedPayments) => {
         setRentPayments(fetchedPayments);
       }
@@ -78,7 +77,7 @@ export default function ExpenseManagementView({
       unsubExpenses();
       unsubPayments();
     };
-  }, [ownerUid, selectedMonth, selectedPropertyId]);
+  }, [ownerUid, selectedPropertyId]);
 
   // Navigate months
   function handlePrevMonth() {
@@ -104,6 +103,9 @@ export default function ExpenseManagementView({
   // Filtered expenses list
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
+      if (getExpenseBillingMonth(e) !== selectedMonth) {
+        return false;
+      }
       // Group filter
       if (selectedGroup !== 'all' && e.group !== selectedGroup) {
         return false;
@@ -124,7 +126,7 @@ export default function ExpenseManagementView({
       }
       return true;
     });
-  }, [expenses, selectedGroup, selectedCategory, searchQuery]);
+  }, [expenses, selectedMonth, selectedGroup, selectedCategory, searchQuery]);
 
   // Financial calculations
   const operatingSummary = useMemo(() => {
@@ -140,14 +142,20 @@ export default function ExpenseManagementView({
     });
 
     expenses
-      .filter((e) => e.group === 'building' && e.status === 'active' && e.propertyId)
+      .filter(
+        (e) =>
+          getExpenseBillingMonth(e) === selectedMonth &&
+          e.group === 'building' &&
+          e.status === 'active' &&
+          e.propertyId
+      )
       .forEach((e) => {
         const entry = map.get(e.propertyId!) || {
           propertyName: e.propertyName || 'Property',
           totalAmount: 0,
           count: 0,
         };
-        entry.totalAmount += e.amount;
+        entry.totalAmount = sumMoney([entry.totalAmount, e.amount]);
         entry.count += 1;
         map.set(e.propertyId!, entry);
       });
@@ -158,7 +166,7 @@ export default function ExpenseManagementView({
         ...data,
       }))
       .filter((item) => item.count > 0 || selectedPropertyId === 'all');
-  }, [properties, expenses, selectedPropertyId]);
+  }, [properties, expenses, selectedMonth, selectedPropertyId]);
 
   return (
     <div className="space-y-6">

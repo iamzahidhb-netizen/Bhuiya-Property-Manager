@@ -13,7 +13,9 @@ import {
   BUILDING_CATEGORY_LABELS,
   FAMILY_CATEGORY_LABELS,
 } from './expenseService';
+import { calculateOperatingSummary, getExpenseBillingMonth, getPaymentBillingMonth } from './financialSummary';
 import { parseTimestampMillis, formatDateSafe } from '../utils/dhakaDate';
+import { averageMoney, proportionalMoney, subtractMoney, sumMoney } from '../utils/money';
 import type { Tenant } from '../types/tenant';
 import type { Property } from '../types/property';
 import type {
@@ -86,16 +88,15 @@ export function calculateMonthlyFinancialStatement(
   distribution: FamilyDistribution | null,
   tenants: Tenant[]
 ): MonthlyFinancialStatement {
-  // Realized collections from rent_payments
-  const monthPayments = payments.filter((p) => p.billingMonth === month);
-  const totalOperatingIncome = monthPayments.reduce((acc, p) => acc + p.amount, 0);
+  const operatingSummary = calculateOperatingSummary(month, payments, expenses);
+  const totalOperatingIncome = operatingSummary.actualRentCollected;
 
   // Proportional breakdown from bills of this month
   const monthBills = bills.filter((b) => b.billingMonth === month);
-  const totalBilled = monthBills.reduce((acc, b) => acc + b.totalDue, 0);
-  const totalRentBilled = monthBills.reduce((acc, b) => acc + b.rentAmount, 0);
-  const totalGasBilled = monthBills.reduce((acc, b) => acc + b.gasCharge, 0);
-  const totalWaterBilled = monthBills.reduce((acc, b) => acc + b.waterCharge, 0);
+  const totalBilled = sumMoney(monthBills, (bill) => bill.totalDue);
+  const totalRentBilled = sumMoney(monthBills, (bill) => bill.rentAmount);
+  const totalGasBilled = sumMoney(monthBills, (bill) => bill.gasCharge);
+  const totalWaterBilled = sumMoney(monthBills, (bill) => bill.waterCharge);
 
   let actualRentalIncome = totalOperatingIncome;
   let actualGasIncome = 0;
@@ -103,28 +104,34 @@ export function calculateMonthlyFinancialStatement(
   let actualOtherIncome = 0;
 
   if (totalBilled > 0) {
-    const ratio = totalOperatingIncome / totalBilled;
-    actualRentalIncome = Math.round(totalRentBilled * ratio);
-    actualGasIncome = Math.round(totalGasBilled * ratio);
-    actualWaterIncome = Math.round(totalWaterBilled * ratio);
-    actualOtherIncome = totalOperatingIncome - (actualRentalIncome + actualGasIncome + actualWaterIncome);
+    actualRentalIncome = proportionalMoney(
+      totalRentBilled,
+      totalOperatingIncome,
+      totalBilled
+    );
+    actualGasIncome = proportionalMoney(
+      totalGasBilled,
+      totalOperatingIncome,
+      totalBilled
+    );
+    actualWaterIncome = proportionalMoney(
+      totalWaterBilled,
+      totalOperatingIncome,
+      totalBilled
+    );
+    actualOtherIncome = subtractMoney(
+      subtractMoney(
+        subtractMoney(totalOperatingIncome, actualRentalIncome),
+        actualGasIncome
+      ),
+      actualWaterIncome
+    );
   }
 
-  // Active expenses strictly excluding reversed
-  const monthActiveExpenses = expenses.filter(
-    (e) => e.billingMonth === month && e.status === 'active'
-  );
-
-  const buildingOperatingExpenses = monthActiveExpenses
-    .filter((e) => e.group === 'building')
-    .reduce((acc, e) => acc + e.amount, 0);
-
-  const familySocialExpenses = monthActiveExpenses
-    .filter((e) => e.group === 'family')
-    .reduce((acc, e) => acc + e.amount, 0);
-
-  const totalOperatingExpenses = buildingOperatingExpenses + familySocialExpenses;
-  const netOperatingSurplus = totalOperatingIncome - totalOperatingExpenses;
+  const buildingOperatingExpenses = operatingSummary.buildingExpenses;
+  const familySocialExpenses = operatingSummary.familyExpenses;
+  const totalOperatingExpenses = operatingSummary.totalActualExpenses;
+  const netOperatingSurplus = operatingSummary.netOperatingSurplus;
 
   // Distribution details
   const totalFamilyDistributionDisbursed = distribution?.actualTotalDisbursed || 0;
@@ -133,13 +140,19 @@ export function calculateMonthlyFinancialStatement(
   const reserveInflow = distribution?.reserveInflow || 0;
   const reserveOutflow = distribution?.surplusTransferredToReserve || 0;
 
-  const endingCashBalance =
-    netOperatingSurplus + reserveInflow - totalFamilyDistributionDisbursed - reserveOutflow;
+  const endingCashBalance = subtractMoney(
+    subtractMoney(
+      sumMoney([netOperatingSurplus, reserveInflow]),
+      totalFamilyDistributionDisbursed
+    ),
+    reserveOutflow
+  );
 
   // Security deposits are liabilities
-  const securityDepositsHeld = tenants
-    .filter((t) => t.status === 'active')
-    .reduce((acc, t) => acc + (t.advanceDeposit || 0), 0);
+  const securityDepositsHeld = sumMoney(
+    tenants.filter((tenant) => tenant.status === 'active'),
+    (tenant) => tenant.advanceDeposit || 0
+  );
 
   return {
     month,
@@ -173,30 +186,14 @@ export function calculateYearlyFinancialSummary(
 ): YearlyFinancialSummary {
   const months: MonthlySummaryRow[] = [];
 
-  let totalOperatingIncome = 0;
-  let totalBuildingExpenses = 0;
-  let totalFamilyExpenses = 0;
-  let totalExpenses = 0;
-  let totalNetOperatingSurplus = 0;
-  let totalDistributionDisbursed = 0;
-  let totalReserveNetTransfer = 0;
-
   for (let m = 1; m <= 12; m++) {
     const monthStr = `${year}-${String(m).padStart(2, '0')}`;
-    const monthPayments = payments.filter((p) => p.billingMonth === monthStr);
-    const inc = monthPayments.reduce((acc, p) => acc + p.amount, 0);
-
-    const monthActiveExpenses = expenses.filter(
-      (e) => e.billingMonth === monthStr && e.status === 'active'
-    );
-    const bExp = monthActiveExpenses
-      .filter((e) => e.group === 'building')
-      .reduce((acc, e) => acc + e.amount, 0);
-    const fExp = monthActiveExpenses
-      .filter((e) => e.group === 'family')
-      .reduce((acc, e) => acc + e.amount, 0);
-    const totExp = bExp + fExp;
-    const surplus = inc - totExp;
+    const operatingSummary = calculateOperatingSummary(monthStr, payments, expenses);
+    const inc = operatingSummary.actualRentCollected;
+    const bExp = operatingSummary.buildingExpenses;
+    const fExp = operatingSummary.familyExpenses;
+    const totExp = operatingSummary.totalActualExpenses;
+    const surplus = operatingSummary.netOperatingSurplus;
 
     const dist = distributions.find((d) => d.distributionMonth === monthStr);
     const distDisbursed = dist?.actualTotalDisbursed || 0;
@@ -215,14 +212,15 @@ export function calculateYearlyFinancialSummary(
       reserveNetTransfer: resNet,
     });
 
-    totalOperatingIncome += inc;
-    totalBuildingExpenses += bExp;
-    totalFamilyExpenses += fExp;
-    totalExpenses += totExp;
-    totalNetOperatingSurplus += surplus;
-    totalDistributionDisbursed += distDisbursed;
-    totalReserveNetTransfer += resNet;
   }
+
+  const totalOperatingIncome = sumMoney(months, (row) => row.operatingIncome);
+  const totalBuildingExpenses = sumMoney(months, (row) => row.buildingExpenses);
+  const totalFamilyExpenses = sumMoney(months, (row) => row.familyExpenses);
+  const totalExpenses = sumMoney(months, (row) => row.totalExpenses);
+  const totalNetOperatingSurplus = sumMoney(months, (row) => row.netOperatingSurplus);
+  const totalDistributionDisbursed = sumMoney(months, (row) => row.distributionDisbursed);
+  const totalReserveNetTransfer = sumMoney(months, (row) => row.reserveNetTransfer);
 
   return {
     year,
@@ -234,8 +232,8 @@ export function calculateYearlyFinancialSummary(
     totalNetOperatingSurplus,
     totalDistributionDisbursed,
     totalReserveNetTransfer,
-    averageMonthlyIncome: Math.round(totalOperatingIncome / 12),
-    averageMonthlyExpenses: Math.round(totalExpenses / 12),
+    averageMonthlyIncome: averageMoney(totalOperatingIncome, 12),
+    averageMonthlyExpenses: averageMoney(totalExpenses, 12),
   };
 }
 
@@ -249,10 +247,6 @@ export function calculatePropertyIncomeReport(
   bills: RentBill[],
   selectedMonth?: string
 ): PropertyIncomeReport {
-  let totalBilled = 0;
-  let totalCollected = 0;
-  let totalDue = 0;
-
   const rows: PropertyIncomeRow[] = properties
     .filter((p) => !p.isArchived)
     .map((prop) => {
@@ -265,29 +259,31 @@ export function calculatePropertyIncomeReport(
       const propPayments = payments.filter(
         (p) =>
           p.propertyId === prop.id &&
-          (!selectedMonth || p.billingMonth === selectedMonth)
+          (!selectedMonth || getPaymentBillingMonth(p) === selectedMonth) &&
+          p.entryType === 'payment'
       );
 
-      const bTotal = propBills.reduce((acc, b) => acc + b.totalDue, 0);
-      const cTotal = propPayments.reduce((acc, p) => acc + p.amount, 0);
-      const dTotal = propBills.reduce((acc, b) => acc + b.balanceDue, 0);
+      const bTotal = sumMoney(propBills, (bill) => bill.totalDue);
+      const cTotal = sumMoney(propPayments, (payment) => payment.amount);
+      const dTotal = sumMoney(propBills, (bill) => bill.balanceDue);
 
       // Category breakdown
-      const rentBilled = propBills.reduce((acc, b) => acc + b.rentAmount, 0);
-      const gasBilled = propBills.reduce((acc, b) => acc + b.gasCharge, 0);
-      const waterBilled = propBills.reduce((acc, b) => acc + b.waterCharge, 0);
+      const rentBilled = sumMoney(propBills, (bill) => bill.rentAmount);
+      const gasBilled = sumMoney(propBills, (bill) => bill.gasCharge);
+      const waterBilled = sumMoney(propBills, (bill) => bill.waterCharge);
 
-      const ratio = bTotal > 0 ? cTotal / bTotal : 0;
-      const rentCollected = Math.round(rentBilled * ratio);
-      const gasCollected = Math.round(gasBilled * ratio);
-      const waterCollected = Math.round(waterBilled * ratio);
-      const otherCollected = cTotal - (rentCollected + gasCollected + waterCollected);
+      const rentCollected =
+        bTotal > 0 ? proportionalMoney(rentBilled, cTotal, bTotal) : 0;
+      const gasCollected =
+        bTotal > 0 ? proportionalMoney(gasBilled, cTotal, bTotal) : 0;
+      const waterCollected =
+        bTotal > 0 ? proportionalMoney(waterBilled, cTotal, bTotal) : 0;
+      const otherCollected = subtractMoney(
+        cTotal,
+        sumMoney([rentCollected, gasCollected, waterCollected])
+      );
 
       const collectionRate = bTotal > 0 ? Math.min(100, Math.round((cTotal / bTotal) * 100)) : 100;
-
-      totalBilled += bTotal;
-      totalCollected += cTotal;
-      totalDue += dTotal;
 
       return {
         propertyId: prop.id,
@@ -305,6 +301,9 @@ export function calculatePropertyIncomeReport(
       };
     });
 
+  const totalBilled = sumMoney(rows, (row) => row.totalBilled);
+  const totalCollected = sumMoney(rows, (row) => row.totalCollected);
+  const totalDue = sumMoney(rows, (row) => row.totalDue);
   const overallCollectionRate =
     totalBilled > 0 ? Math.min(100, Math.round((totalCollected / totalBilled) * 100)) : 100;
 
@@ -331,10 +330,10 @@ export function calculatePropertyExpenseReport(
     (e) =>
       e.group === 'building' &&
       e.status === 'active' &&
-      (!selectedMonth || e.billingMonth === selectedMonth)
+      (!selectedMonth || getExpenseBillingMonth(e) === selectedMonth)
   );
 
-  const totalBuildingExpenses = activeExpenses.reduce((acc, e) => acc + e.amount, 0);
+  const totalBuildingExpenses = sumMoney(activeExpenses, (expense) => expense.amount);
 
   const rows: PropertyExpenseRow[] = [];
 
@@ -343,15 +342,15 @@ export function calculatePropertyExpenseReport(
     .filter((p) => !p.isArchived)
     .forEach((prop) => {
       const pExp = activeExpenses.filter((e) => e.propertyId === prop.id);
-      const electricity = pExp.filter((e) => e.category === 'electricity').reduce((acc, e) => acc + e.amount, 0);
-      const gas = pExp.filter((e) => e.category === 'gas').reduce((acc, e) => acc + e.amount, 0);
-      const water = pExp.filter((e) => e.category === 'water').reduce((acc, e) => acc + e.amount, 0);
-      const caretaker = pExp.filter((e) => e.category === 'caretaker_salary').reduce((acc, e) => acc + e.amount, 0);
-      const maintenance = pExp.filter((e) => e.category === 'maintenance_repair').reduce((acc, e) => acc + e.amount, 0);
-      const cleaning = pExp.filter((e) => e.category === 'cleaning').reduce((acc, e) => acc + e.amount, 0);
-      const security = pExp.filter((e) => e.category === 'security').reduce((acc, e) => acc + e.amount, 0);
-      const otherBuilding = pExp.filter((e) => e.category === 'other_building').reduce((acc, e) => acc + e.amount, 0);
-      const tot = pExp.reduce((acc, e) => acc + e.amount, 0);
+      const electricity = sumMoney(pExp.filter((e) => e.category === 'electricity'), (e) => e.amount);
+      const gas = sumMoney(pExp.filter((e) => e.category === 'gas'), (e) => e.amount);
+      const water = sumMoney(pExp.filter((e) => e.category === 'water'), (e) => e.amount);
+      const caretaker = sumMoney(pExp.filter((e) => e.category === 'caretaker_salary'), (e) => e.amount);
+      const maintenance = sumMoney(pExp.filter((e) => e.category === 'maintenance_repair'), (e) => e.amount);
+      const cleaning = sumMoney(pExp.filter((e) => e.category === 'cleaning'), (e) => e.amount);
+      const security = sumMoney(pExp.filter((e) => e.category === 'security'), (e) => e.amount);
+      const otherBuilding = sumMoney(pExp.filter((e) => e.category === 'other_building'), (e) => e.amount);
+      const tot = sumMoney(pExp, (expense) => expense.amount);
 
       rows.push({
         propertyId: prop.id,
@@ -372,15 +371,15 @@ export function calculatePropertyExpenseReport(
   // Shared / General expenses without property attribution
   const sharedExp = activeExpenses.filter((e) => !e.propertyId);
   if (sharedExp.length > 0) {
-    const electricity = sharedExp.filter((e) => e.category === 'electricity').reduce((acc, e) => acc + e.amount, 0);
-    const gas = sharedExp.filter((e) => e.category === 'gas').reduce((acc, e) => acc + e.amount, 0);
-    const water = sharedExp.filter((e) => e.category === 'water').reduce((acc, e) => acc + e.amount, 0);
-    const caretaker = sharedExp.filter((e) => e.category === 'caretaker_salary').reduce((acc, e) => acc + e.amount, 0);
-    const maintenance = sharedExp.filter((e) => e.category === 'maintenance_repair').reduce((acc, e) => acc + e.amount, 0);
-    const cleaning = sharedExp.filter((e) => e.category === 'cleaning').reduce((acc, e) => acc + e.amount, 0);
-    const security = sharedExp.filter((e) => e.category === 'security').reduce((acc, e) => acc + e.amount, 0);
-    const otherBuilding = sharedExp.filter((e) => e.category === 'other_building').reduce((acc, e) => acc + e.amount, 0);
-    const tot = sharedExp.reduce((acc, e) => acc + e.amount, 0);
+    const electricity = sumMoney(sharedExp.filter((e) => e.category === 'electricity'), (e) => e.amount);
+    const gas = sumMoney(sharedExp.filter((e) => e.category === 'gas'), (e) => e.amount);
+    const water = sumMoney(sharedExp.filter((e) => e.category === 'water'), (e) => e.amount);
+    const caretaker = sumMoney(sharedExp.filter((e) => e.category === 'caretaker_salary'), (e) => e.amount);
+    const maintenance = sumMoney(sharedExp.filter((e) => e.category === 'maintenance_repair'), (e) => e.amount);
+    const cleaning = sumMoney(sharedExp.filter((e) => e.category === 'cleaning'), (e) => e.amount);
+    const security = sumMoney(sharedExp.filter((e) => e.category === 'security'), (e) => e.amount);
+    const otherBuilding = sumMoney(sharedExp.filter((e) => e.category === 'other_building'), (e) => e.amount);
+    const tot = sumMoney(sharedExp, (expense) => expense.amount);
 
     rows.push({
       propertyId: 'shared',
@@ -462,9 +461,9 @@ export function calculateTenantRentLedger(
   // Sort chronologically
   entries.sort((a, b) => a.date.localeCompare(b.date));
 
-  const totalBilled = tenantBills.reduce((acc, b) => acc + b.totalDue, 0);
-  const totalPaid = tenantPayments.reduce((acc, p) => acc + p.amount, 0);
-  const totalOutstandingDue = Math.max(0, totalBilled - totalPaid);
+  const totalBilled = sumMoney(tenantBills, (bill) => bill.totalDue);
+  const totalPaid = sumMoney(tenantPayments, (payment) => payment.amount);
+  const totalOutstandingDue = Math.max(0, subtractMoney(totalBilled, totalPaid));
 
   const firstBill = tenantBills[0];
   const propertyName = firstBill?.propertyName || 'প্রপার্টি';
@@ -530,7 +529,7 @@ export function calculateOutstandingRentReport(
   // Sort highest balance due first
   items.sort((a, b) => b.balanceDue - a.balanceDue);
 
-  const totalOverdueAmount = items.reduce((acc, i) => acc + i.balanceDue, 0);
+  const totalOverdueAmount = sumMoney(items, (item) => item.balanceDue);
   const overdueBillsCount = items.length;
   const uniqueTenants = new Set(items.map((i) => i.tenantId));
 
@@ -554,7 +553,7 @@ export function calculateBuildingExpenseReport(
 ): BuildingExpenseReport {
   const filtered = expenses.filter((e) => {
     if (e.group !== 'building') return false;
-    if (selectedMonth && e.billingMonth !== selectedMonth) return false;
+    if (selectedMonth && getExpenseBillingMonth(e) !== selectedMonth) return false;
     if (propertyId && propertyId !== 'all' && e.propertyId !== propertyId) return false;
     return true;
   });
@@ -562,15 +561,15 @@ export function calculateBuildingExpenseReport(
   const active = filtered.filter((e) => e.status === 'active');
   const reversed = filtered.filter((e) => e.status === 'reversed');
 
-  const totalBuildingExpenses = active.reduce((acc, e) => acc + e.amount, 0);
-  const reversedAmountExcluded = reversed.reduce((acc, e) => acc + e.amount, 0);
+  const totalBuildingExpenses = sumMoney(active, (expense) => expense.amount);
+  const reversedAmountExcluded = sumMoney(reversed, (expense) => expense.amount);
 
   const categories: BuildingExpenseCategorySummary[] = Object.keys(
     BUILDING_CATEGORY_LABELS
   ).map((catKey) => {
     const cat = catKey as BuildingExpenseCategory;
     const catExpenses = active.filter((e) => e.category === cat);
-    const totalAmount = catExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const totalAmount = sumMoney(catExpenses, (expense) => expense.amount);
     const entryCount = catExpenses.length;
     const percentageOfTotal =
       totalBuildingExpenses > 0 ? Math.round((totalAmount / totalBuildingExpenses) * 100) : 0;
@@ -610,17 +609,17 @@ export function calculateFamilyExpenseReport(
     (e) =>
       e.group === 'family' &&
       e.status === 'active' &&
-      (!selectedMonth || e.billingMonth === selectedMonth)
+      (!selectedMonth || getExpenseBillingMonth(e) === selectedMonth)
   );
 
-  const totalFamilyExpenses = active.reduce((acc, e) => acc + e.amount, 0);
+  const totalFamilyExpenses = sumMoney(active, (expense) => expense.amount);
 
   const categories: FamilyExpenseCategorySummary[] = Object.keys(
     FAMILY_CATEGORY_LABELS
   ).map((catKey) => {
     const cat = catKey as FamilyExpenseCategory;
     const catExpenses = active.filter((e) => e.category === cat);
-    const totalAmount = catExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const totalAmount = sumMoney(catExpenses, (expense) => expense.amount);
     const entryCount = catExpenses.length;
     const percentageOfTotal =
       totalFamilyExpenses > 0 ? Math.round((totalAmount / totalFamilyExpenses) * 100) : 0;
@@ -743,13 +742,19 @@ export function calculateReserveFundStatement(
     ? ledger.filter((l) => !l.distributionMonth || l.distributionMonth === selectedMonth)
     : ledger;
 
-  const depositsInPeriod = filtered
-    .filter((l) => l.type === 'surplus_deposit' || l.type === 'opening_balance')
-    .reduce((acc, l) => acc + l.amount, 0);
+  const depositsInPeriod = sumMoney(
+    filtered.filter(
+      (entry) => entry.type === 'surplus_deposit' || entry.type === 'opening_balance'
+    ),
+    (entry) => entry.amount
+  );
 
-  const withdrawalsInPeriod = filtered
-    .filter((l) => l.type === 'shortage_withdrawal' || l.type === 'emergency_withdrawal')
-    .reduce((acc, l) => acc + l.amount, 0);
+  const withdrawalsInPeriod = sumMoney(
+    filtered.filter(
+      (entry) => entry.type === 'shortage_withdrawal' || entry.type === 'emergency_withdrawal'
+    ),
+    (entry) => entry.amount
+  );
 
   // Chronological sort
   const sorted = [...filtered].sort((a, b) => {
@@ -778,7 +783,11 @@ export function calculateReserveFundStatement(
     currentBalance,
     totalDeposited,
     totalWithdrawn,
-    openingBalanceForPeriod: currentBalance - depositsInPeriod + withdrawalsInPeriod,
+    openingBalanceForPeriod: sumMoney([
+      currentBalance,
+      -depositsInPeriod,
+      withdrawalsInPeriod,
+    ]),
     depositsInPeriod,
     withdrawalsInPeriod,
     closingBalanceForPeriod: currentBalance,
@@ -796,7 +805,7 @@ export function calculateNetOperatingBalance(
   const operatingSurplusOrDeficit = statement.netOperatingSurplus;
   const totalDisbursablePool = Math.max(
     0,
-    operatingSurplusOrDeficit + statement.reserveInflow
+    sumMoney([operatingSurplusOrDeficit, statement.reserveInflow])
   );
 
   return {
@@ -827,11 +836,14 @@ export function calculateBudgetVsActualReport(
   const budgetTarget = MONTHLY_BUILDING_EXPENSE_BUDGET; // ৳60,000
 
   const activeBuildingExpenses = expenses.filter(
-    (e) => e.billingMonth === month && e.group === 'building' && e.status === 'active'
+    (e) =>
+      getExpenseBillingMonth(e) === month &&
+      e.group === 'building' &&
+      e.status === 'active'
   );
 
-  const actualBuildingExpense = activeBuildingExpenses.reduce((acc, e) => acc + e.amount, 0);
-  const varianceAmount = budgetTarget - actualBuildingExpense;
+  const actualBuildingExpense = sumMoney(activeBuildingExpenses, (expense) => expense.amount);
+  const varianceAmount = subtractMoney(budgetTarget, actualBuildingExpense);
   const variancePercentage =
     budgetTarget > 0 ? Math.round(((actualBuildingExpense - budgetTarget) / budgetTarget) * 100) : 0;
 
@@ -845,7 +857,7 @@ export function calculateBudgetVsActualReport(
   const categoryBreakdown = Object.keys(BUILDING_CATEGORY_LABELS).map((catKey) => {
     const cat = catKey as BuildingExpenseCategory;
     const catExpenses = activeBuildingExpenses.filter((e) => e.category === cat);
-    const actualAmount = catExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const actualAmount = sumMoney(catExpenses, (expense) => expense.amount);
     const percentageOfActual =
       actualBuildingExpense > 0 ? Math.round((actualAmount / actualBuildingExpense) * 100) : 0;
 

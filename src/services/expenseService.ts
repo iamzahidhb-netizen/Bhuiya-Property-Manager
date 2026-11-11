@@ -12,6 +12,8 @@ import { STORES, saveItem } from '../lib/offlineDb';
 import { syncEngine } from '../lib/syncEngine';
 import { auth } from '../lib/firebase';
 import { getActiveWorkspaceId } from '../lib/apiClient';
+export { calculateOperatingSummary } from './financialSummary';
+export type { FinancialOperatingSummary } from './financialSummary';
 import type {
   Expense,
   ExpenseFormData,
@@ -21,9 +23,7 @@ import type {
   ExpenseCategory,
   BuildingExpenseCategory,
   FamilyExpenseCategory,
-  RentPayment,
 } from '../types/finance';
-import { MONTHLY_BUILDING_EXPENSE_BUDGET } from '../types/finance';
 
 const EXPENSES_COLL = 'expenses';
 
@@ -264,67 +264,4 @@ export async function reverseExpense(
   );
   const res = await reverseFn(input);
   return res.data;
-}
-
-// =============================================================================
-// FINANCIAL SUMMARY CALCULATION
-// =============================================================================
-
-export interface FinancialOperatingSummary {
-  billingMonth: string;
-  actualRentCollected: number;
-  buildingExpenses: number;
-  familyExpenses: number;
-  totalActualExpenses: number;
-  netOperatingSurplus: number;
-  buildingBudgetTarget: number;
-  buildingBudgetVariance: number; // positive = over budget, negative = under budget
-  budgetUtilizationPercent: number;
-}
-
-/**
- * Calculates net operating balance strictly according to financial rules:
- * Net Operating Balance = Actual Collections - Actual Building Expenses - Actual Family Expenses
- */
-export function calculateOperatingSummary(
-  month: string,
-  rentPayments: RentPayment[],
-  expenses: Expense[]
-): FinancialOperatingSummary {
-  // Only actual received payments in rent_payments (excluding reversals)
-  const actualRentCollected = rentPayments
-    .filter((p) => p.billingMonth === month && p.entryType === 'payment')
-    .reduce((sum, p) => sum + p.amount, 0);
-
-  // Only active (non-reversed) expenses in this month
-  const activeMonthExpenses = expenses.filter(
-    (e) => e.billingMonth === month && e.status === 'active'
-  );
-
-  const buildingExpenses = activeMonthExpenses
-    .filter((e) => e.group === 'building')
-    .reduce((sum, e) => sum + e.amount, 0);
-
-  const familyExpenses = activeMonthExpenses
-    .filter((e) => e.group === 'family')
-    .reduce((sum, e) => sum + e.amount, 0);
-
-  const totalActualExpenses = buildingExpenses + familyExpenses;
-  const netOperatingSurplus = actualRentCollected - totalActualExpenses;
-
-  const buildingBudgetTarget = MONTHLY_BUILDING_EXPENSE_BUDGET;
-  const buildingBudgetVariance = buildingExpenses - buildingBudgetTarget;
-  const budgetUtilizationPercent = Math.round((buildingExpenses / buildingBudgetTarget) * 100);
-
-  return {
-    billingMonth: month,
-    actualRentCollected,
-    buildingExpenses,
-    familyExpenses,
-    totalActualExpenses,
-    netOperatingSurplus,
-    buildingBudgetTarget,
-    buildingBudgetVariance,
-    budgetUtilizationPercent,
-  };
 }

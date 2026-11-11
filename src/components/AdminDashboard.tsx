@@ -6,12 +6,18 @@ import { subscribeProperties, subscribeUnits } from '../services/propertyService
 import { subscribeTenants } from '../services/tenantService';
 import { subscribeRentBills, subscribeRentPayments } from '../services/rentService';
 import { subscribeExpenses } from '../services/expenseService';
+import {
+  calculateOperatingSummary,
+  getExpenseBillingMonth,
+  getPaymentBillingMonth,
+} from '../services/financialSummary';
 import type { Property, Unit } from '../types/property';
 import type { Tenant } from '../types/tenant';
 import type { RentBill, RentPayment, Expense } from '../types/finance';
 import { formatLocalizedCurrency, formatLocalizedMonth } from '../utils/banglaFormat';
 import { getDhakaDateInfo, getUserDisplayName } from '../utils/dhakaDate';
 import { processProfileImage } from '../utils/imageUtils';
+import { subtractMoney, sumMoney } from '../utils/money';
 
 // Full-Page Financial Workflows & Modals
 import RentDepositPage from './finance/RentDepositPage';
@@ -321,22 +327,26 @@ export default function AdminDashboard() {
     return '';
   };
 
+  const operatingSummary = calculateOperatingSummary(selectedMonth, payments, expenses);
   const selectedMonthPayments = payments.filter(
-    (p) => (p.billingMonth || resolveDateMonth(p.paymentDate)) === selectedMonth
+    (payment) => getPaymentBillingMonth(payment) === selectedMonth
   );
-  const totalRentCollected = selectedMonthPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalRentCollected = operatingSummary.actualRentCollected;
 
   const selectedMonthBills = bills.filter((b) => (b.billingMonth || resolveDateMonth(b.createdAt)) === selectedMonth);
-  const totalRentDue = selectedMonthBills.reduce((sum, b) => sum + b.balanceDue, 0);
+  const totalRentDue = sumMoney(selectedMonthBills, (bill) => bill.balanceDue);
 
   const selectedMonthExpenses = expenses.filter(
-    (e) => (e.billingMonth || resolveDateMonth(e.expenseDate)) === selectedMonth && e.status === 'active'
+    (expense) => getExpenseBillingMonth(expense) === selectedMonth && expense.status === 'active'
   );
-  const totalExpenses = selectedMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = operatingSummary.totalActualExpenses;
 
   // Payouts for family members (Brother 1, 2, 3 target 45k each)
   const familyPayoutsTotal = 0; // Staging write lock guarantees 0 live mutations
-  const cashInHand = totalRentCollected - totalExpenses - familyPayoutsTotal;
+  const cashInHand = subtractMoney(
+    subtractMoney(totalRentCollected, totalExpenses),
+    familyPayoutsTotal
+  );
 
   // Active tenant card helper
   function getTenantMonthStatus(tItem: Tenant) {

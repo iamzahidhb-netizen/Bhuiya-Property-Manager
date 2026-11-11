@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build --mode staging && node poc/phase-10-2a/package-worker.mjs",
     "lint": "eslint .",
+    "test:financial": "node --experimental-strip-types poc/phase-10-2a/test-financial-integrity.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

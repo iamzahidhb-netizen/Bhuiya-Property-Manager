@@ -10,6 +10,8 @@ import type {
 } from '../../types/finance';
 import { subscribeRentPayments } from '../../services/rentService';
 import { subscribeExpenses } from '../../services/expenseService';
+import { calculateOperatingSummary } from '../../services/financialSummary';
+import { subtractMoney, sumMoney } from '../../utils/money';
 import {
   subscribeBeneficiaries,
   subscribeMonthlyDistribution,
@@ -76,10 +78,6 @@ export default function DistributionManagementView({
       setLoading(false);
     });
 
-    const unsubDistribution = subscribeMonthlyDistribution(ownerUid, selectedMonth, (data) => {
-      setDistribution(data);
-    });
-
     const unsubReserve = subscribeReserveFund(ownerUid, (data) => {
       setReserveFund(data);
     });
@@ -88,49 +86,39 @@ export default function DistributionManagementView({
       setReserveLedger(data);
     });
 
-    const unsubPayments = subscribeRentPayments(ownerUid, { billingMonth: selectedMonth }, (data) => {
+    const unsubPayments = subscribeRentPayments(ownerUid, {}, (data) => {
       setRentPayments(data);
     });
 
-    const unsubExpenses = subscribeExpenses(ownerUid, { billingMonth: selectedMonth }, (data) => {
+    const unsubExpenses = subscribeExpenses(ownerUid, {}, (data) => {
       setExpenses(data);
     });
 
     return () => {
       unsubBeneficiaries();
-      unsubDistribution();
       unsubReserve();
       unsubLedger();
       unsubPayments();
       unsubExpenses();
     };
+  }, [ownerUid]);
+
+  useEffect(() => {
+    if (!ownerUid) return;
+    return subscribeMonthlyDistribution(ownerUid, selectedMonth, setDistribution);
   }, [ownerUid, selectedMonth]);
 
   // Financial Calculations for Selected Month
   const financialSummary = useMemo(() => {
-    // Actual collections from tenant rent/utilities payments (liabilities like security deposits excluded)
-    let actualCollections = 0;
-    for (const p of rentPayments) {
-      if (p.entryType === 'payment') {
-        actualCollections += p.amount || 0;
-      }
-    }
-
-    // Actual operating expenses (building + family)
-    let buildingExpenses = 0;
-    let familyExpenses = 0;
-    for (const e of expenses) {
-      if (e.status === 'active') {
-        if (e.group === 'building') {
-          buildingExpenses += e.amount || 0;
-        } else if (e.group === 'family') {
-          familyExpenses += e.amount || 0;
-        }
-      }
-    }
-
-    const totalOperatingExpenses = buildingExpenses + familyExpenses;
-    const netOperatingBalance = actualCollections - totalOperatingExpenses;
+    const operatingSummary = calculateOperatingSummary(
+      selectedMonth,
+      rentPayments,
+      expenses
+    );
+    const actualCollections = operatingSummary.actualRentCollected;
+    const { buildingExpenses, familyExpenses, totalActualExpenses: totalOperatingExpenses } =
+      operatingSummary;
+    const netOperatingBalance = operatingSummary.netOperatingSurplus;
 
     const totalTarget = distribution?.finalTargetTotal || 0;
     const totalDisbursed = distribution?.actualTotalDisbursed || 0;
@@ -139,13 +127,22 @@ export default function DistributionManagementView({
     const surplusTransferred = distribution?.surplusTransferredToReserve || 0;
 
     // Available cash pool for payouts = Net Operating Surplus + Reserve Inflow - Total Already Disbursed
-    const availableCashPool = Math.max(0, netOperatingBalance + reserveInflow - totalDisbursed);
+    const availableCashPool = Math.max(
+      0,
+      subtractMoney(sumMoney([netOperatingBalance, reserveInflow]), totalDisbursed)
+    );
 
     // Distributable surplus remaining for reserve deposit
-    const availableSurplusForReserve = Math.max(0, netOperatingBalance - totalDisbursed - surplusTransferred);
+    const availableSurplusForReserve = Math.max(
+      0,
+      subtractMoney(
+        subtractMoney(netOperatingBalance, totalDisbursed),
+        surplusTransferred
+      )
+    );
 
     // Monthly Surplus or Shortage
-    const monthlyNetSurplusOrShortage = netOperatingBalance - totalTarget;
+    const monthlyNetSurplusOrShortage = subtractMoney(netOperatingBalance, totalTarget);
 
     return {
       actualCollections,
@@ -163,7 +160,7 @@ export default function DistributionManagementView({
       monthlyNetSurplusOrShortage,
       reserveFundBalance: reserveFund?.currentBalance || 0,
     };
-  }, [rentPayments, expenses, distribution, reserveFund]);
+  }, [selectedMonth, rentPayments, expenses, distribution, reserveFund]);
 
   // Initialize or fetch distribution snapshot
   async function handleInitializeDistribution() {
