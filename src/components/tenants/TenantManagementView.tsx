@@ -8,6 +8,7 @@ import {
   registerTenant,
   vacateTenant,
 } from '../../services/tenantService';
+import { calculateHeldDepositTotal } from '../../services/financialSummary';
 import TenantModal from './TenantModal';
 import VacateModal from './VacateModal';
 import TenantDetailsModal from './TenantDetailsModal';
@@ -105,9 +106,7 @@ export default function TenantManagementView({
   // Top Metrics
   const activeTenantsCount = tenants.filter((t) => t.status === 'active').length;
   const vacatedTenantsCount = tenants.filter((t) => t.status === 'vacated').length;
-  const totalHeldDeposits = deposits
-    .filter((d) => d.status === 'held')
-    .reduce((sum, d) => sum + (d.depositAmount - (d.refundedAmount || 0) - (d.damageDeductionAmount || 0)), 0);
+  const totalHeldDeposits = calculateHeldDepositTotal(deposits);
 
   return (
     <div className="space-y-6 animate-fadeIn">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Tenant } from '../../types/tenant';
 import type { RentBill, RentPayment } from '../../types/finance';
 import { subscribeRentBills, subscribeRentPayments } from '../../services/rentService';
+import { calculateRentBillSummary } from '../../services/financialSummary';
 
 interface TenantHistoryModalProps {
   isOpen: boolean;
@@ -52,9 +53,11 @@ export default function TenantHistoryModal({
 
   if (!isOpen || !tenant) return null;
 
-  const totalBilled = bills.reduce((acc, b) => acc + b.totalDue, 0);
-  const totalPaid = bills.reduce((acc, b) => acc + b.totalPaid, 0);
-  const totalBalanceDue = bills.reduce((acc, b) => acc + b.balanceDue, 0);
+  const {
+    totalDemand: totalBilled,
+    totalCollected: totalPaid,
+    totalDue: totalBalanceDue,
+  } = calculateRentBillSummary(bills);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto overscroll-contain">

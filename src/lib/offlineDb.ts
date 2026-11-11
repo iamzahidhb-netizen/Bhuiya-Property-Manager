@@ -78,6 +78,11 @@ export interface CachedEntity<T = unknown> {
   isOfflineCreated?: boolean;
 }
 
+export interface AtomicStoreWrite {
+  storeName: StoreName;
+  item: unknown;
+}
+
 let dbInstance: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -222,6 +227,29 @@ export async function saveItemsBatch<T>(storeName: StoreName, items: T[]): Promi
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error || new Error(`Error batch saving to ${storeName}`));
+  });
+}
+
+/**
+ * Saves related entities across object stores in a single IndexedDB transaction.
+ */
+export async function saveItemsAtomically(
+  writes: readonly AtomicStoreWrite[]
+): Promise<void> {
+  if (writes.length === 0) return;
+  const db = await getOfflineDb();
+  const storeNames = [...new Set(writes.map((write) => write.storeName))];
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeNames, 'readwrite');
+
+    for (const write of writes) {
+      tx.objectStore(write.storeName).put(write.item);
+    }
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('Atomic IndexedDB write failed.'));
+    tx.onabort = () => reject(tx.error || new Error('Atomic IndexedDB write was aborted.'));
   });
 }
 

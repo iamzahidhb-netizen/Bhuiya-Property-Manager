@@ -14,9 +14,11 @@ import {
   saveItem,
   saveItemsBatch,
   getAllItems,
+  type AtomicStoreWrite,
   type SyncStatus,
 } from '../lib/offlineDb';
 import { syncEngine } from '../lib/syncEngine';
+import { calculateRentPaymentBalance } from './financialSummary';
 import type {
   RentBill,
   RentPayment,
@@ -379,14 +381,14 @@ export async function recordRentPayment(
     propertyName = matchedBill.propertyName || propertyName;
     billingMonth = matchedBill.billingMonth || billingMonth;
 
-    newTotalPaid = (matchedBill.totalPaid || 0) + input.amount;
-    newBalanceDue = Math.max(0, (matchedBill.totalDue || input.amount) - newTotalPaid);
-    newStatus = newBalanceDue === 0 ? 'paid' : 'partial';
+    const updatedBalance = calculateRentPaymentBalance(matchedBill, input.amount);
+    newTotalPaid = updatedBalance.totalPaid;
+    newBalanceDue = updatedBalance.balanceDue;
+    newStatus = updatedBalance.status;
 
     matchedBill.totalPaid = newTotalPaid;
     matchedBill.balanceDue = newBalanceDue;
     matchedBill.status = newStatus;
-    await saveItem(STORES.RENT_BILLS, matchedBill);
   }
 
   const offlinePaymentDoc = {
@@ -407,10 +409,14 @@ export async function recordRentPayment(
     createdAt: new Date().toISOString(),
   };
 
-  // Save offline payment to IndexedDB
-  await saveItem(STORES.RENT_PAYMENTS, offlinePaymentDoc);
+  const relatedWrites: AtomicStoreWrite[] = [
+    { storeName: STORES.RENT_PAYMENTS, item: offlinePaymentDoc },
+  ];
+  if (matchedBill) {
+    relatedWrites.push({ storeName: STORES.RENT_BILLS, item: matchedBill });
+  }
 
-  // Queue mutation for automatic synchronization
+  // Persist the optimistic balance, payment, and queue item atomically.
   await syncEngine.enqueueAction({
     actionName: 'recordRentPaymentCallable',
     payload: {
@@ -422,6 +428,7 @@ export async function recordRentPayment(
     workspaceId: currentWsId,
     callerUid: auth.currentUser?.uid || 'offline_user',
     localEntityId: offlineId,
+    relatedWrites,
   });
 
   return {

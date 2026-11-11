@@ -8,6 +8,8 @@ import {
   type GenerateBillsResult,
   type RecordPaymentResult,
 } from '../../services/rentService';
+import { calculateRentBillSummary } from '../../services/financialSummary';
+import { sumMoney } from '../../utils/money';
 import GenerateBillsModal from './GenerateBillsModal';
 import RecordPaymentModal from './RecordPaymentModal';
 import RentReceiptModal from './RentReceiptModal';
@@ -129,9 +131,10 @@ export default function RentManagementView({
   }, [bills, selectedStatus, searchQuery]);
 
   // Summary Metrics for the current month / view
-  const totalDemand = useMemo(() => bills.reduce((acc, b) => acc + b.totalDue, 0), [bills]);
-  const totalCollected = useMemo(() => bills.reduce((acc, b) => acc + b.totalPaid, 0), [bills]);
-  const totalDue = useMemo(() => bills.reduce((acc, b) => acc + b.balanceDue, 0), [bills]);
+  const { totalDemand, totalCollected, totalDue } = useMemo(
+    () => calculateRentBillSummary(bills),
+    [bills]
+  );
   const collectionRate = totalDemand > 0 ? Math.round((totalCollected / totalDemand) * 100) : 0;
 
   const countPaid = useMemo(() => bills.filter((b) => b.status === 'paid').length, [bills]);
@@ -166,9 +169,9 @@ export default function RentManagementView({
         due: 0,
         billsCount: 0,
       };
-      entry.demand += b.totalDue;
-      entry.collected += b.totalPaid;
-      entry.due += b.balanceDue;
+      entry.demand = sumMoney([entry.demand, b.totalDue]);
+      entry.collected = sumMoney([entry.collected, b.totalPaid]);
+      entry.due = sumMoney([entry.due, b.balanceDue]);
       entry.billsCount += 1;
       map.set(b.propertyId, entry);
     });

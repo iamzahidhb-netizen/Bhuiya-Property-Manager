@@ -12,6 +12,7 @@
 import {
   STORES,
   saveItem,
+  saveItemsAtomically,
   getItem,
   getAllItems,
   deleteItem,
@@ -19,6 +20,7 @@ import {
   setMetadata,
   type OfflineQueueItem,
   type OfflineAttachment,
+  type AtomicStoreWrite,
   type SyncStatus,
 } from './offlineDb';
 import { callCallable, resolveApiBase } from './apiClient';
@@ -262,6 +264,7 @@ class SyncEngine {
     callerUid: string;
     attachmentIds?: string[];
     localEntityId?: string;
+    relatedWrites?: readonly AtomicStoreWrite[];
   }): Promise<OfflineQueueItem<T>> {
     const id = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const idempotencyKey = `${params.actionName}_${params.callerUid}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -282,7 +285,14 @@ class SyncEngine {
       localEntityId: params.localEntityId,
     };
 
-    await saveItem(STORES.OFFLINE_QUEUE, queueItem);
+    if (params.relatedWrites?.length) {
+      await saveItemsAtomically([
+        ...params.relatedWrites,
+        { storeName: STORES.OFFLINE_QUEUE, item: queueItem },
+      ]);
+    } else {
+      await saveItem(STORES.OFFLINE_QUEUE, queueItem);
+    }
     await this.refreshCounts();
 
     // If online, kick off queue drain immediately in background

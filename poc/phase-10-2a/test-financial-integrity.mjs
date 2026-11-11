@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
-import { calculateOperatingSummary, getPaymentBillingMonth } from '../../src/services/financialSummary.ts';
+import {
+  calculateHeldDepositTotal,
+  calculateOperatingSummary,
+  calculateRentBillSummary,
+  calculateRentPaymentBalance,
+  getPaymentBillingMonth,
+} from '../../src/services/financialSummary.ts';
 import {
   averageMoney,
   proportionalMoney,
   subtractMoney,
   sumMoney,
 } from '../../src/utils/money.ts';
+import { formatMoney } from '../../src/utils/uiFormatters.ts';
+import { formatLocalizedCurrency } from '../../src/utils/banglaFormat.ts';
 
 assert.equal(sumMoney([0.1, 0.2]), 0.3);
 assert.equal(sumMoney([0.005, -0.005]), 0);
@@ -56,4 +64,56 @@ assert.equal(summary.familyExpenses, 0.2);
 assert.equal(summary.totalActualExpenses, 0.6);
 assert.equal(summary.netOperatingSurplus, 9.7);
 
-console.log('Financial integrity regression checks: 12 passed, 0 failed.');
+const rentBillSummary = calculateRentBillSummary([
+  { totalDue: 0.1, totalPaid: 0.05, balanceDue: 0.05 },
+  { totalDue: 0.2, totalPaid: 0.1, balanceDue: 0.1 },
+]);
+assert.equal(rentBillSummary.totalDemand, 0.3);
+assert.equal(rentBillSummary.totalCollected, 0.15);
+assert.equal(rentBillSummary.totalDue, 0.15);
+
+assert.deepEqual(
+  calculateRentPaymentBalance(
+    { totalDue: 100, totalPaid: 20, balanceDue: 80 },
+    30
+  ),
+  { totalPaid: 50, balanceDue: 50, status: 'partial' }
+);
+assert.deepEqual(
+  calculateRentPaymentBalance(
+    { totalDue: 100, totalPaid: 75, balanceDue: 25 },
+    25
+  ),
+  { totalPaid: 100, balanceDue: 0, status: 'paid' }
+);
+assert.throws(
+  () => calculateRentPaymentBalance(
+    { totalDue: 100, totalPaid: 75, balanceDue: 25 },
+    26
+  ),
+  RangeError
+);
+assert.equal(
+  calculateHeldDepositTotal([
+    {
+      status: 'held',
+      depositAmount: 100.1,
+      refundedAmount: 0.1,
+      damageDeductionAmount: 0.2,
+    },
+    {
+      status: 'fully_refunded',
+      depositAmount: 900,
+      refundedAmount: 900,
+      damageDeductionAmount: 0,
+    },
+  ]),
+  99.8
+);
+assert.equal(formatMoney(-125000, { useBanglaDigits: true }), '-৳১,২৫,০০০');
+assert.equal(
+  formatLocalizedCurrency(-125000, 'bn', true),
+  formatMoney(-125000, { useBanglaDigits: true })
+);
+
+console.log('Financial integrity regression checks: 19 passed, 0 failed.');

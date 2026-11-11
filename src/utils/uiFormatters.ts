@@ -27,7 +27,7 @@ const BANGLA_DIGITS_MAP: Record<string, string> = {
   '9': '৯',
 };
 
-const BANGLA_MONTHS: Record<string, string> = {
+export const BANGLA_MONTHS: Record<string, string> = {
   '01': 'জানুয়ারি',
   '02': 'ফেব্রুয়ারি',
   '03': 'মার্চ',
@@ -42,7 +42,7 @@ const BANGLA_MONTHS: Record<string, string> = {
   '12': 'ডিসেম্বর',
 };
 
-const ENGLISH_MONTHS: Record<string, string> = {
+export const ENGLISH_MONTHS: Record<string, string> = {
   '01': 'January',
   '02': 'February',
   '03': 'March',
