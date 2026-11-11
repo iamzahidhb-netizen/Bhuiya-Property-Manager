@@ -8,6 +8,10 @@ import {
 import { db } from '../lib/firebase';
 import { createCallable } from '../lib/apiClient';
 import { parseTimestampMillis } from '../utils/dhakaDate';
+import { STORES, saveItem } from '../lib/offlineDb';
+import { syncEngine } from '../lib/syncEngine';
+import { auth } from '../lib/firebase';
+import { getActiveWorkspaceId } from '../lib/apiClient';
 import type {
   Expense,
   ExpenseFormData,
@@ -128,16 +132,105 @@ export interface CreateExpenseResult {
   group: ExpenseGroup;
   category: ExpenseCategory;
   billingMonth: string;
+  isOffline?: boolean;
 }
 
 export async function createExpense(
   input: ExpenseFormData
 ): Promise<CreateExpenseResult> {
-  const createFn = createCallable<ExpenseFormData, CreateExpenseResult>(
-    'createExpenseCallable'
-  );
-  const res = await createFn(input);
-  return res.data;
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  if (isOnline) {
+    try {
+      const createFn = createCallable<ExpenseFormData, CreateExpenseResult>(
+        'createExpenseCallable'
+      );
+      const res = await createFn(input);
+
+      // Cache confirmed expense in IndexedDB
+      const expDoc = {
+        id: res.data.expenseId,
+        title: input.title,
+        group: input.group,
+        category: input.category,
+        amount: input.amount,
+        expenseDate: input.expenseDate,
+        billingMonth: res.data.billingMonth || input.expenseDate.slice(0, 7),
+        description: input.description,
+        propertyId: input.propertyId || null,
+        paymentMethod: input.paymentMethod || 'cash',
+        workspaceId: getActiveWorkspaceId() || 'workspace_bhuiya_family',
+        status: 'active' as const,
+        syncStatus: 'synced' as const,
+        createdAt: new Date().toISOString(),
+      };
+      saveItem(STORES.EXPENSES, expDoc).catch(() => {});
+
+      return {
+        ...res.data,
+        isOffline: false,
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isNetworkErr =
+        errMsg.includes('Failed to fetch') ||
+        errMsg.includes('unavailable') ||
+        errMsg.includes('NetworkError');
+
+      if (!isNetworkErr) {
+        throw err;
+      }
+      console.warn('[ExpenseService] Cloud endpoint unreachable; falling back to offline save:', errMsg);
+    }
+  }
+
+  // Offline Execution Path
+  const currentWsId = getActiveWorkspaceId() || 'workspace_bhuiya_family';
+  const offlineId = `exp_offline_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const billingMonth = input.expenseDate.slice(0, 7);
+
+  const offlineExpDoc = {
+    id: offlineId,
+    title: input.title,
+    group: input.group,
+    category: input.category,
+    amount: input.amount,
+    expenseDate: input.expenseDate,
+    billingMonth,
+    description: input.description,
+    propertyId: input.propertyId || null,
+    paymentMethod: input.paymentMethod || 'cash',
+    workspaceId: currentWsId,
+    status: 'active' as const,
+    syncStatus: 'pending' as const,
+    isOfflineCreated: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  await saveItem(STORES.EXPENSES, offlineExpDoc);
+
+  await syncEngine.enqueueAction({
+    actionName: 'createExpenseCallable',
+    payload: {
+      ...input,
+      isOfflineGenerated: true,
+    },
+    category: 'expense',
+    workspaceId: currentWsId,
+    callerUid: auth.currentUser?.uid || 'offline_user',
+    localEntityId: offlineId,
+  });
+
+  return {
+    success: true,
+    expenseId: offlineId,
+    title: input.title,
+    amount: input.amount,
+    group: input.group,
+    category: input.category,
+    billingMonth,
+    isOffline: true,
+  };
 }
 
 export interface UpdateExpenseResult {

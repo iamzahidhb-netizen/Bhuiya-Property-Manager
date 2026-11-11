@@ -177,7 +177,7 @@ async function runAllTests() {
   const parsedHeader = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[0])));
   const parsedPayload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
   assert(parsedHeader.alg === 'RS256' && parsedPayload.iss === dummyCreds.client_email, 'Service Account: Assertion contains correct issuer and RS256 alg');
-  assert(parsedPayload.scope === 'https://www.googleapis.com/auth/datastore', 'Service Account: Assertion targets datastore scope');
+  assert(parsedPayload.scope.split(' ').includes('https://www.googleapis.com/auth/datastore'), 'Service Account: Assertion includes the Firestore datastore scope');
 
   clearTokenCache();
   let fetchCallCount = 0;
@@ -833,6 +833,20 @@ async function runAllTests() {
           canRecordExpenses: true,
           canViewReports: true
         }
+      },
+      workspace_bhuiya_family_uid_brother_2: {
+        workspaceId: 'workspace_bhuiya_family',
+        uid: 'uid_brother_2',
+        role: 'viewer',
+        status: 'active',
+        permissions: {}
+      },
+      workspace_bhuiya_family_uid_brother_3: {
+        workspaceId: 'workspace_bhuiya_family',
+        uid: 'uid_brother_3',
+        role: 'viewer',
+        status: 'active',
+        permissions: {}
       }
     }
   };
@@ -1100,18 +1114,15 @@ async function runAllTests() {
     // Group 7: Family Workspace Management (3)
     {
       action: 'inviteFamilyMemberCallable',
-      payload: { email: 'sister@bhuiya.com', assignedRole: 'family_manager' },
-      expectedField: 'assignedRole'
+      payload: { email: 'sister@bhuiya.com', assignedRole: 'manager' }
     },
     {
       action: 'updateMemberPermissionsCallable',
-      payload: { targetUid: 'uid_brother_2', assignedRole: 'family_viewer' },
-      expectedField: 'assignedRole'
+      payload: { targetUid: 'uid_brother_2', assignedRole: 'viewer' }
     },
     {
       action: 'deactivateFamilyMemberCallable',
-      payload: { targetUid: 'uid_brother_3' },
-      expectedField: 'isActive'
+      payload: { targetUid: 'uid_brother_3' }
     }
   ];
 
@@ -1127,11 +1138,21 @@ async function runAllTests() {
 
     const res = await bundledWorker.default.fetch(actionReq, workerEnv, {});
     const body = await res.json();
-    const passed =
-      res.status === 200 &&
-      body.data &&
-      body.data.status === 'PACKAGING_VALIDATED' &&
-      body.data[item.expectedField] !== undefined;
+    const isLegacyMemberAction = [
+      'inviteFamilyMemberCallable',
+      'updateMemberPermissionsCallable',
+      'deactivateFamilyMemberCallable'
+    ].includes(item.action);
+    const passed = res.status === 200 && body.data && (
+      isLegacyMemberAction
+        ? item.action === 'inviteFamilyMemberCallable'
+          ? body.data.member?.email === 'sister@bhuiya.com' && body.data.member?.role === 'manager'
+          : item.action === 'updateMemberPermissionsCallable'
+            ? body.data.targetUid === 'uid_brother_2' && body.data.role === 'viewer'
+            : body.data.targetUid === 'uid_brother_3' && body.data.status === 'inactive'
+        : body.data.status === 'PACKAGING_VALIDATED' &&
+          body.data[item.expectedField] !== undefined
+    );
 
     assert(
       passed,

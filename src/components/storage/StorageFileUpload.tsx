@@ -13,11 +13,11 @@ import {
   type StorageCategory,
   type StorageFile
 } from '../../services/storageService';
-import { DriveFilePreviewModal } from './DriveFilePreviewModal';
+import { StorageFilePreviewModal } from './StorageFilePreviewModal';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { PillButton } from '../ui/hyperos';
 
-export interface DriveFileUploadProps {
+export interface StorageFileUploadProps {
   category: StorageCategory;
   tenantId?: string;
   propertyId?: string;
@@ -28,7 +28,7 @@ export interface DriveFileUploadProps {
   className?: string;
 }
 
-export const DriveFileUpload: React.FC<DriveFileUploadProps> = ({
+export const StorageFileUpload: React.FC<StorageFileUploadProps> = ({
   category,
   tenantId,
   propertyId,
@@ -206,7 +206,7 @@ export const DriveFileUpload: React.FC<DriveFileUploadProps> = ({
             <div className="space-y-1">
               <div className="w-full bg-black/10 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
                 <div
-                  className="bg-[#1685E8] h-full transition-all duration-300 rounded-full"
+                  className="bg-[var(--hyper-green)] h-full transition-all duration-300 rounded-full"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -232,7 +232,7 @@ export const DriveFileUpload: React.FC<DriveFileUploadProps> = ({
               </PillButton>
               <PillButton size="sm" variant="primary" onClick={startUpload}>
                 <UploadCloud className="w-3.5 h-3.5 mr-1" />
-                {isBn ? 'গুগল ড্রাইভে আপলোড' : 'Upload to Drive'}
+                {isBn ? 'Cloudflare R2-তে আপলোড' : 'Upload to Cloudflare R2'}
               </PillButton>
             </div>
           )}
@@ -249,7 +249,9 @@ export const DriveFileUpload: React.FC<DriveFileUploadProps> = ({
                 {uploadedFile.originalFileName || uploadedFile.fileName}
               </p>
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                {isBn ? '✓ ড্রাইভে সুরক্ষিত' : '✓ Stored on Drive'}
+                {uploadedFile.isOffline
+                  ? (isBn ? '⚠️ অফলাইনে সংরক্ষিত (সিঙ্ক বাকি)' : '⚠️ Stored offline (sync pending)')
+                  : (isBn ? '✓ Cloudflare R2-তে সুরক্ষিত' : '✓ Stored in private Cloudflare R2')}
               </span>
             </div>
           </div>
@@ -279,7 +281,7 @@ export const DriveFileUpload: React.FC<DriveFileUploadProps> = ({
       )}
 
       {/* In-App Preview Modal */}
-      <DriveFilePreviewModal
+      <StorageFilePreviewModal
         file={uploadedFile}
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}

@@ -3,8 +3,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
 
-export type ThemePreference = 'light' | 'dark' | 'system';
-export type ResolvedTheme = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark' | 'oled' | 'system';
+export type ResolvedTheme = 'light' | 'dark' | 'oled';
 
 interface ThemeContextType {
   theme: ThemePreference;
@@ -26,7 +26,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<ThemePreference>(() => {
     if (typeof window === 'undefined') return 'light';
     const saved = localStorage.getItem(THEME_STORAGE_KEY) as ThemePreference | null;
-    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'light';
+    return saved === 'light' || saved === 'dark' || saved === 'oled' || saved === 'system' ? saved : 'light';
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
@@ -43,25 +43,36 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const root = document.documentElement;
       if (activeResolved === 'dark') {
         root.classList.add('dark');
+        root.classList.remove('theme-oled');
+        root.removeAttribute('data-theme');
+        root.setAttribute('data-theme', 'dark');
+        root.style.colorScheme = 'dark';
+      } else if (activeResolved === 'oled') {
+        root.classList.add('dark', 'theme-oled');
+        root.setAttribute('data-theme', 'oled');
         root.style.colorScheme = 'dark';
       } else {
-        root.classList.remove('dark');
+        root.classList.remove('dark', 'theme-oled');
+        root.removeAttribute('data-theme');
+        root.setAttribute('data-theme', 'light');
         root.style.colorScheme = 'light';
       }
 
-      // Update mobile browser status bar color
+      // Update mobile browser status bar color (Spec v3.1: Light #F2F3F5, Dark #0B0D10, OLED #000000)
       const metaThemeColor = document.querySelector('meta[name="theme-color"]');
       if (metaThemeColor) {
-        metaThemeColor.setAttribute('content', activeResolved === 'dark' ? '#121214' : '#F2F3F5');
+        const barColor = activeResolved === 'oled' ? '#000000' : activeResolved === 'dark' ? '#0B0D10' : '#F2F3F5';
+        metaThemeColor.setAttribute('content', barColor);
       }
 
       // Synchronize native Capacitor Android status bar immediately
       if (Capacitor.isNativePlatform()) {
-        if (activeResolved === 'dark') {
-          StatusBar.setBackgroundColor({ color: '#121214' }).catch(() => {});
+        if (activeResolved === 'dark' || activeResolved === 'oled') {
+          const capColor = activeResolved === 'oled' ? '#000000' : '#0B0D10';
+          StatusBar.setBackgroundColor({ color: capColor }).catch(() => {});
           StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
         } else {
-          StatusBar.setBackgroundColor({ color: '#FFFFFF' }).catch(() => {});
+          StatusBar.setBackgroundColor({ color: '#F2F3F5' }).catch(() => {});
           StatusBar.setStyle({ style: Style.Light }).catch(() => {});
         }
       }

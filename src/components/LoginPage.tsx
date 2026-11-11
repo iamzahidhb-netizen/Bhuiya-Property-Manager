@@ -71,7 +71,7 @@ export default function LoginPage() {
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      setError(isBengali ? 'ইমেইল প্রদান করুন।' : 'Please enter your email.');
+      setError(isBengali ? 'ইউজারনেম বা ইমেইল প্রদান করুন।' : 'Please enter your username or email.');
       return;
     }
     if (!password) {
@@ -83,7 +83,8 @@ export default function LoginPage() {
     try {
       const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
-      await signInWithEmailAndPassword(auth, cleanEmail, password);
+      const loginEmail = cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@bhuiyan.com`;
+      await signInWithEmailAndPassword(auth, loginEmail, password);
     } catch (err) {
       const authError = err as AuthError;
       console.warn('[Login] Authentication rejected:', authError.code, authError.message);
@@ -158,9 +159,6 @@ export default function LoginPage() {
             <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm font-semibold text-emerald-800">
               {t('app.tagline')}
             </p>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              {isBengali ? 'ভূঁইয়া পরিবার প্রপার্টি ও ডিজিটাল খাতা' : 'Property & Family Finance Management'}
-            </p>
           </div>
 
           {/* Error message */}
@@ -179,12 +177,13 @@ export default function LoginPage() {
                 htmlFor="email"
                 className="block text-xs font-bold text-slate-700 mb-1"
               >
-                {t('auth.email')}
+                {isBengali ? 'ইউজারনেম / ইমেইল' : 'Username / Email'}
               </label>
               <input
                 id="email"
-                type="email"
-                autoComplete="email"
+                type="text"
+                inputMode="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onFocus={(e) => {
@@ -192,7 +191,7 @@ export default function LoginPage() {
                     e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                   }, 200);
                 }}
-                placeholder="zahid@bhuiyan.com"
+                placeholder="zahid"
                 disabled={loading}
                 className="w-full rounded-xl border border-slate-300/80 bg-white/80 backdrop-blur-xs px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
               />
@@ -277,14 +276,11 @@ export default function LoginPage() {
           </form>
 
           {/* Footer */}
-          <p className="mt-7 text-center text-xs text-slate-500">
-            {isBengali ? 'শুধুমাত্র অনুমোদিত পারিবারিক সদস্যদের জন্য' : 'Authorized family members only'}
-          </p>
         </LiquidGlass>
 
         {/* Bottom brand */}
         <p className="mt-5 text-center text-xs text-slate-500">
-          &copy; {new Date().getFullYear()} {isBengali ? 'আনোয়ার ভূঁইয়া প্রপার্টি' : 'Anwar Bhuiyan Property'}
+          &copy; {new Date().getFullYear()} {isBengali ? 'আনোয়ার ভূঁইয়া প্রপার্টি' : 'Anwar Bhuiyan Property'} by Zahid&apos;s Verge
         </p>
       </div>
     </div>

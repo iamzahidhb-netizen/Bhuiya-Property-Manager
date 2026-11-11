@@ -20,6 +20,7 @@ import { LiquidGlass } from '../ui/LiquidGlass';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
   Users,
+  UserRound,
   RotateCw,
   UserPlus,
   AlertTriangle,
@@ -32,6 +33,7 @@ import {
   ShieldCheck,
   Copy,
 } from 'lucide-react';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 
 interface MemberManagementModalProps {
   isOpen: boolean;
@@ -66,7 +68,7 @@ export function MemberManagementModal({
   const [addName, setAddName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
-  const [addPassword, setAddPassword] = useState('112233');
+  const [addPassword, setAddPassword] = useState('');
   const [addRole, setAddRole] = useState<'manager' | 'viewer' | 'custom'>('viewer');
   const [addPermissions, setAddPermissions] = useState<Record<string, boolean>>(
     ROLE_PRESET_CONFIGS.viewer.permissions
@@ -94,7 +96,7 @@ export function MemberManagementModal({
     setError(null);
     try {
       const data = await listWorkspaceMembers();
-      setMembers(data);
+      setMembers([...new Map(data.map((member) => [member.uid, member])).values()]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'সদস্য তালিকা লোড করতে সমস্যা হয়েছে';
       setError(msg);
@@ -226,6 +228,12 @@ export function MemberManagementModal({
     }
   }
 
+  function closeAddModal() {
+    setAddModalOpen(false);
+    setAddPassword('');
+    setExistingAccountConfirm(false);
+  }
+
   // Submit Add Member
   async function handleCreateMember(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -242,7 +250,7 @@ export function MemberManagementModal({
         email: addEmail.trim(),
         displayName: addName.trim() || addEmail.trim().split('@')[0],
         role: addRole,
-        password: addPassword || '112233',
+        password: addPassword || undefined,
         mobile: addPhone.trim() || undefined,
         permissions: addPermissions,
         confirmExistingLink: existingAccountConfirm,
@@ -268,7 +276,7 @@ export function MemberManagementModal({
       setAddName('');
       setAddEmail('');
       setAddPhone('');
-      setAddPassword('112233');
+      setAddPassword('');
       setAddRole('viewer');
       setAddPermissions(ROLE_PRESET_CONFIGS.viewer.permissions);
       setExistingAccountConfirm(false);
@@ -415,27 +423,27 @@ export function MemberManagementModal({
     switch (role) {
       case 'master_admin':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+          <StatusBadge tone="success">
             মাস্টার অ্যাডমিন
-          </span>
+          </StatusBadge>
         );
       case 'manager':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+          <StatusBadge tone="success">
             ম্যানেজার
-          </span>
+          </StatusBadge>
         );
       case 'viewer':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+          <StatusBadge tone="neutral">
             দর্শক
-          </span>
+          </StatusBadge>
         );
       case 'custom':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+          <StatusBadge tone="warning">
             কাস্টম পারমিশন
-          </span>
+          </StatusBadge>
         );
     }
   }
@@ -444,25 +452,25 @@ export function MemberManagementModal({
     switch (status) {
       case 'active':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+          <StatusBadge tone="success">
+            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
             সক্রিয়
-          </span>
+          </StatusBadge>
         );
       case 'suspended':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+          <StatusBadge tone="danger">
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
             স্থগিত
-          </span>
+          </StatusBadge>
         );
       case 'inactive':
       default:
         return (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+          <StatusBadge tone="neutral">
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
             নিষ্ক্রিয়
-          </span>
+          </StatusBadge>
         );
     }
   }
@@ -583,8 +591,8 @@ export function MemberManagementModal({
             </div>
           ) : members.length === 0 ? (
             <div className="py-12 text-center text-slate-500 space-y-3 bg-white/60 backdrop-blur-xs rounded-2xl border border-dashed border-slate-300">
-              <span className="text-3xl">👥</span>
-              <p className="text-sm font-semibold">ওয়ার্কস্পেসে কোনো সদস্য পাওয়া যায়নি</p>
+              <Users className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+              <p className="text-base font-semibold">কোনো ডেটা নেই</p>
               <button
                 onClick={() => setAddModalOpen(true)}
                 className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold cursor-pointer"
@@ -604,7 +612,7 @@ export function MemberManagementModal({
                   data-member-email={member.email}
                   className={`p-5 rounded-3xl border transition flex flex-col justify-between space-y-3 ${
                     isMaster
-                      ? 'bg-purple-50/40 border-purple-300/80 shadow-xs'
+                      ? 'bg-emerald-50/40 border-emerald-300/80 shadow-xs'
                       : 'border-white/80 hover:border-emerald-400/80 shadow-2xs'
                   }`}
                   scale={-85}
@@ -617,13 +625,13 @@ export function MemberManagementModal({
                       <div
                         className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 ${
                           isMaster
-                            ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/30'
+                            ? 'bg-[#22B84A] text-white shadow-sm shadow-[#22B84A]/30'
                             : member.role === 'manager'
-                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                            ? 'bg-[#22B84A] text-white shadow-sm shadow-[#22B84A]/30'
                             : 'bg-slate-700 text-white shadow-sm shadow-slate-700/30'
                         }`}
                       >
-                        {member.displayName ? member.displayName.charAt(0).toUpperCase() : '👤'}
+                        {member.displayName ? member.displayName.charAt(0).toUpperCase() : <UserRound className="h-5 w-5" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -651,10 +659,10 @@ export function MemberManagementModal({
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-2 sm:self-center shrink-0">
                       {isMaster ? (
-                        <div className="px-3 py-1.5 rounded-xl bg-purple-50/90 text-purple-700 border border-purple-200 text-xs font-semibold shadow-2xs flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                        <StatusBadge tone="success" className="rounded-xl py-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
                           <span>{t('memberManagement.protectedAdmin')}</span>
-                        </div>
+                        </StatusBadge>
                       ) : (
                         <>
                           <button
@@ -704,7 +712,7 @@ export function MemberManagementModal({
                     <div className="flex items-center gap-1.5">
                       <span className="font-semibold text-slate-700">অনুমোদিত মডিউল:</span>
                       {isMaster ? (
-                        <span className="text-purple-700 font-medium">সকল মডিউলে সর্বময় নিয়ন্ত্রণ (Full Admin)</span>
+                        <span className="text-emerald-700 font-medium">সকল মডিউলে সর্বময় নিয়ন্ত্রণ (Full Admin)</span>
                       ) : (
                         <span className="text-emerald-700 font-semibold">
                           {activeModCount}টি মডিউলের অ্যাক্সেস রয়েছে
@@ -758,7 +766,7 @@ export function MemberManagementModal({
                 <h3 className="text-lg font-bold">{t('memberManagement.addMemberDialogTitle')}</h3>
               </div>
               <button
-                onClick={() => setAddModalOpen(false)}
+                onClick={closeAddModal}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
                 aria-label={t('common.close')}
               >
@@ -836,16 +844,19 @@ export function MemberManagementModal({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    প্রাথমিক পাসওয়ার্ড (লগইনের জন্য) <span className="text-red-500">*</span>
+                    নতুন অ্যাকাউন্টের পাসওয়ার্ড
                   </label>
                   <input
-                    type="text"
-                    required={!existingAccountConfirm}
+                    type="password"
+                    autoComplete="new-password"
                     value={addPassword}
                     onChange={(e) => setAddPassword(e.target.value)}
-                    placeholder="কমপক্ষে ৬ অক্ষর (উদাঃ 112233)"
+                    placeholder="নতুন অ্যাকাউন্ট হলে কমপক্ষে ৬ অক্ষর"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    আগে থেকে অ্যাকাউন্ট থাকলে পাসওয়ার্ড ফাঁকা রাখুন।
+                  </p>
                 </div>
               </div>
 
@@ -971,7 +982,7 @@ export function MemberManagementModal({
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setAddModalOpen(false)}
+                  onClick={closeAddModal}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition"
                 >
                   বাতিল

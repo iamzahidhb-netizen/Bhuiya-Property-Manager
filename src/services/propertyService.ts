@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createCallable } from '../lib/apiClient';
+import { STORES, saveItemsBatch, getAllItems } from '../lib/offlineDb';
 import type { Property, PropertyInput, Unit, UnitInput } from '../types/property';
 
 const PROPERTIES_COLL = 'properties';
@@ -39,6 +40,21 @@ export function subscribeProperties(
   workspaceId?: string | null
 ): Unsubscribe {
   const effectiveWsId = workspaceId || 'workspace_bhuiya_family';
+
+  // 1. Pre-load immediately from IndexedDB cache
+  getAllItems<Property>(STORES.PROPERTIES)
+    .then((cached) => {
+      if (cached && cached.length > 0) {
+        const filtered = cached.filter((p) => !p.workspaceId || p.workspaceId === effectiveWsId);
+        filtered.sort((a, b) => {
+          if (a.isArchived !== b.isArchived) return a.isArchived ? 1 : -1;
+          return a.name.localeCompare(b.name, 'bn');
+        });
+        if (filtered.length > 0) onUpdate(filtered);
+      }
+    })
+    .catch((err) => console.warn('[PropertyService] Failed to read cached properties:', err));
+
   const constraints = [where('workspaceId', '==', effectiveWsId)];
 
   const q = query(
@@ -53,6 +69,12 @@ export function subscribeProperties(
         id: docSnap.id,
         ...(docSnap.data() as Omit<Property, 'id'>),
       }));
+
+      // Cache in IndexedDB
+      saveItemsBatch(STORES.PROPERTIES, properties).catch((err) =>
+        console.warn('[PropertyService] Failed to cache properties:', err)
+      );
+
       properties.sort((a, b) => {
         if (a.isArchived !== b.isArchived) return a.isArchived ? 1 : -1;
         return a.name.localeCompare(b.name, 'bn');

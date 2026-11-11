@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_SETTINGS } from '../../types/settings';
@@ -58,9 +59,7 @@ export const BillingRentSettings: React.FC<{ onBack: () => void }> = ({ onBack }
             {isBn ? 'ভাড়া চক্র, ডিউ তারিখের সতর্কবার্তা এবং প্রদর্শনী পছন্দ' : 'Billing cycle, due date threshold & table view'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Cycle & Due Date */}

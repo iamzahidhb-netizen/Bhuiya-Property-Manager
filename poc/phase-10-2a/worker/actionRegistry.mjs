@@ -1332,8 +1332,7 @@ export const ACTION_REGISTRY = {
     },
     execute: async (ctx, payload) => {
       return await ACTION_REGISTRY['createWorkspaceMemberCallable'].execute(ctx, {
-        ...payload,
-        password: payload.password || 'TemporaryPass2026!'
+        ...payload
       });
     }
   },

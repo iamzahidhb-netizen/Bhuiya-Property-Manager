@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Palette, Sun, Moon, Laptop, Sparkles, Check, RefreshCw, Compass } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -38,7 +39,7 @@ export const AppearanceThemeSettings: React.FC<AppearanceThemeSettingsProps> = (
     }
   }, [activeTab, registerBackGuard]);
   const [selectedTheme, setSelectedTheme] = useState<AppTheme>(settings.appearance.theme || theme);
-  const [accentColor, setAccentColor] = useState<AccentColor>(settings.appearance.accentColor || 'green');
+  const [accentColor, setAccentColor] = useState<AccentColor>('green');
   const [cardStyle, setCardStyle] = useState<'glass' | 'solid'>(settings.appearance.cardStyle || 'glass');
   const [layoutDensity, setLayoutDensity] = useState<'comfortable' | 'compact'>(settings.appearance.layoutDensity || 'comfortable');
 
@@ -67,9 +68,6 @@ export const AppearanceThemeSettings: React.FC<AppearanceThemeSettingsProps> = (
 
   const ACCENTS: { id: AccentColor; nameBn: string; nameEn: string; hex: string; bgClass: string }[] = [
     { id: 'green', nameBn: 'হাইপার গ্রিন', nameEn: 'Hyper Green', hex: '#22B84A', bgClass: 'bg-[#22B84A]' },
-    { id: 'blue', nameBn: 'স্কাই ব্লু', nameEn: 'Sky Blue', hex: '#1685E8', bgClass: 'bg-[#1685E8]' },
-    { id: 'orange', nameBn: 'সান অরেঞ্জ', nameEn: 'Sun Orange', hex: '#F28A24', bgClass: 'bg-[#F28A24]' },
-    { id: 'purple', nameBn: 'রয়্যাল পার্পল', nameEn: 'Royal Purple', hex: '#7655E8', bgClass: 'bg-[#7655E8]' },
   ];
 
   if (activeTab === 'animation') {
@@ -110,9 +108,7 @@ export const AppearanceThemeSettings: React.FC<AppearanceThemeSettingsProps> = (
             {isBn ? 'লাইট/ডার্ক মোড, অ্যাকসেন্ট কালার এবং কার্ড স্টাইল' : 'Light/Dark modes, accent colors, and styling'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Navigation Tabs Switcher */}
@@ -163,7 +159,7 @@ export const AppearanceThemeSettings: React.FC<AppearanceThemeSettingsProps> = (
       <HyperCard variant="default" className="p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-3 pb-3 border-b border-[var(--hyper-border-subtle)]">
           <div className="w-9 h-9 rounded-[14px] bg-[var(--hyper-orange-bg)] flex items-center justify-center shrink-0">
-            <Palette className="w-5 h-5 text-[#F28A24]" />
+            <Palette className="w-5 h-5 text-[var(--hyper-green)]" />
           </div>
           <div>
             <h4 className="text-sm font-bold text-[var(--hyper-text-primary)]">

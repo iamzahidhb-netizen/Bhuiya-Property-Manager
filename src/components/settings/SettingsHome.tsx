@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Search,
   ChevronRight,
-  ArrowLeft,
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -17,13 +16,11 @@ export type { SettingsCategoryId, SettingsCategoryDef };
 
 export interface SettingsHomeProps {
   onSelectCategory: (id: SettingsCategoryId) => void;
-  onBack?: () => void;
   isMasterAdmin: boolean;
 }
 
 export const SettingsHome: React.FC<SettingsHomeProps> = ({
   onSelectCategory,
-  onBack,
   isMasterAdmin,
 }) => {
   const { currentLanguage } = useLanguage();
@@ -104,28 +101,14 @@ export const SettingsHome: React.FC<SettingsHomeProps> = ({
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      {/* Top Header with Back Button */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label={isBn ? 'প্রোফাইলে ফিরুন' : 'Back to Profile'}
-              className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          )}
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-[var(--hyper-text-primary)] tracking-tight">
-              {isBn ? 'সেটিংস' : 'Settings'}
-            </h2>
-            <p className="text-xs text-[var(--hyper-text-secondary)] mt-0.5">
-              {isBn ? 'অ্যাপ্লিকেশন পছন্দসমূহ ও কাস্টমাইজেশন' : 'Manage your application preferences'}
-            </p>
-          </div>
-        </div>
+      {/* Page title; SettingsCenter provides the single page-level back button. */}
+      <div>
+        <h2 className="text-xl sm:text-2xl font-bold text-[var(--hyper-text-primary)] tracking-tight">
+          {isBn ? 'সেটিংস' : 'Settings'}
+        </h2>
+        <p className="text-xs text-[var(--hyper-text-secondary)] mt-0.5">
+          {isBn ? 'অ্যাপ্লিকেশন পছন্দসমূহ ও কাস্টমাইজেশন' : 'Manage your application preferences'}
+        </p>
       </div>
 
       {/* Search Input Bar */}
@@ -147,7 +130,14 @@ export const SettingsHome: React.FC<SettingsHomeProps> = ({
             filteredCategories.map(renderCategoryRow)
           ) : (
             <div className="p-8 text-center text-xs text-[var(--hyper-text-secondary)]">
-              {isBn ? 'কোনো সেটিংস পাওয়া যায়নি।' : 'No settings found matching your search.'}
+              <p>{isBn ? 'কোনো ডেটা নেই' : 'No data'}</p>
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="mt-3 rounded-full border border-[var(--hyper-green)]/40 px-4 py-2 text-sm font-semibold text-[var(--hyper-green)] hover:bg-[var(--hyper-green-bg)]"
+              >
+                {isBn ? 'অনুসন্ধান মুছুন' : 'Clear search'}
+              </button>
             </div>
           )}
         </HyperCard>

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   CheckCircle2,
-  ArrowLeft,
   Search,
   ChevronRight,
   Shield,
@@ -28,12 +27,14 @@ import { UserPermissionSettings } from './UserPermissionSettings';
 import { SecurityPrivacySettings } from './SecurityPrivacySettings';
 import { DataBackupSettings } from './DataBackupSettings';
 import { AboutSupportSettings } from './AboutSupportSettings';
-import { StorageIntegrationsSettings } from './StorageIntegrationsSettings';
+import { CloudStorageSettings } from './CloudStorageSettings';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useAppNavigation } from '../../contexts/NavigationContext';
 import { PageTransitionContainer } from '../ui/hyperos';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import { DEFAULT_ANIMATION_SETTINGS } from '../../types/settings';
 
 export interface SettingsCenterProps {
@@ -125,7 +126,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
       case 'backup':
         return <DataBackupSettings onBack={handleSubBack} />;
       case 'storage':
-        return <StorageIntegrationsSettings onBack={handleSubBack} />;
+        return <CloudStorageSettings onBack={handleSubBack} />;
       case 'about':
         return <AboutSupportSettings onBack={handleSubBack} />;
       default:
@@ -204,24 +205,21 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Back Arrow + App Title */}
           <div className="flex items-center gap-3">
-            <button
-              type="button"
+            <BackIconButton
               onClick={handleBack}
               aria-label={isBn ? 'প্রোফাইলে ফিরে যান' : 'Back to Profile'}
-              className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+              className="h-9 w-9"
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-[var(--hyper-text-primary)] leading-tight">
                   {isBn ? 'সেটিংস সেন্টার' : 'Settings Center'}
                 </h1>
                 {isMasterAdmin && (
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                  <StatusBadge tone="success" className="hidden sm:inline-flex">
                     <Shield className="w-3 h-3" />
                     <span>{isBn ? 'মাস্টার Admin' : 'Master Admin'}</span>
-                  </span>
+                  </StatusBadge>
                 )}
               </div>
               <p className="text-[11px] text-[var(--hyper-text-secondary)] hidden sm:block">
@@ -232,14 +230,6 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
             </div>
           </div>
 
-          {/* Right: Quick Back Link */}
-          <button
-            type="button"
-            onClick={handleBack}
-            className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-          >
-            {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
-          </button>
         </div>
       </header>
 
@@ -269,7 +259,14 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
                   filteredSidebarCategories.map(renderSidebarItem)
                 ) : (
                   <div className="p-4 text-center text-xs text-[var(--hyper-text-secondary)]">
-                    {isBn ? 'কোনো ফলাফল পাওয়া যায়নি' : 'No results found'}
+                    <p>{isBn ? 'কোনো ডেটা নেই' : 'No data'}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarSearch('')}
+                      className="mt-2 rounded-full border border-[var(--hyper-green)]/40 px-3 py-1.5 text-sm font-semibold text-[var(--hyper-green)] hover:bg-[var(--hyper-green-bg)]"
+                    >
+                      {isBn ? 'অনুসন্ধান মুছুন' : 'Clear search'}
+                    </button>
                   </div>
                 )}
               </div>
@@ -324,7 +321,6 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
           {activeCategory === null && (
             <SettingsHome
               onSelectCategory={(id) => setSettingsCategory(id)}
-              onBack={handleBack}
               isMasterAdmin={Boolean(isMasterAdmin)}
             />
           )}

@@ -20,14 +20,14 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { PillButton } from '../ui/hyperos';
 
-export interface DriveFilePreviewModalProps {
+export interface StorageFilePreviewModalProps {
   file: StorageFile | null;
   isOpen: boolean;
   onClose: () => void;
   onDeleted?: (fileId: string) => void;
 }
 
-export const DriveFilePreviewModal: React.FC<DriveFilePreviewModalProps> = ({
+export const StorageFilePreviewModal: React.FC<StorageFilePreviewModalProps> = ({
   file,
   isOpen,
   onClose,
@@ -43,42 +43,42 @@ export const DriveFilePreviewModal: React.FC<DriveFilePreviewModalProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!isOpen || !file) {
-      if (previewUrl) {
-        revokeFileBlobUrl(previewUrl);
-        setPreviewUrl(null);
-      }
-      return;
-    }
+    if (!isOpen || !file) return;
 
     let isMounted = true;
-    setLoading(true);
-    setError(null);
+    let loadedPreviewUrl: string | null = null;
 
-    fetchFileBlob(file.id, 'preview')
-      .then(({ objectUrl }) => {
+    const loadPreview = async () => {
+      await Promise.resolve();
+      if (!isMounted) return;
+
+      setLoading(true);
+      setError(null);
+      setPreviewUrl(null);
+      try {
+        const { objectUrl } = await fetchFileBlob(file.id, 'preview');
         if (isMounted) {
+          loadedPreviewUrl = objectUrl;
           setPreviewUrl(objectUrl);
           setLoading(false);
         } else {
           revokeFileBlobUrl(objectUrl);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (isMounted) {
           console.error('Error fetching file preview blob:', err);
-          setError(err?.message || (isBn ? 'ফাইল লোড করা সম্ভব হয়নি' : 'Failed to load file preview'));
+          setError(err instanceof Error ? err.message : (isBn ? 'ফাইল লোড করা সম্ভব হয়নি' : 'Failed to load file preview'));
           setLoading(false);
         }
-      });
-
-    return () => {
-      isMounted = false;
-      if (previewUrl) {
-        revokeFileBlobUrl(previewUrl);
       }
     };
-  }, [isOpen, file?.id]);
+
+    void loadPreview();
+    return () => {
+      isMounted = false;
+      if (loadedPreviewUrl) revokeFileBlobUrl(loadedPreviewUrl);
+    };
+  }, [isOpen, file, isBn]);
 
   if (!isOpen || !file) return null;
 
@@ -176,7 +176,7 @@ export const DriveFilePreviewModal: React.FC<DriveFilePreviewModalProps> = ({
             <div className="flex flex-col items-center gap-3 text-center">
               <Loader2 className="w-8 h-8 text-[#1685E8] animate-spin" />
               <p className="text-xs text-[var(--hyper-text-secondary)]">
-                {isBn ? 'গুগল ড্রাইভ থেকে ফাইল প্রিভিউ তৈরি হচ্ছে...' : 'Streaming private preview from Google Drive...'}
+                {isBn ? 'ব্যক্তিগত ক্লাউড স্টোরেজ থেকে প্রিভিউ লোড হচ্ছে...' : 'Loading private cloud file preview...'}
               </p>
             </div>
           )}
@@ -237,7 +237,7 @@ export const DriveFilePreviewModal: React.FC<DriveFilePreviewModalProps> = ({
             </span>
           </div>
           <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-            🔒 Private Google Drive Storage (No Public Links)
+            🔒 Private Cloudflare R2 Storage
           </span>
         </div>
       </div>

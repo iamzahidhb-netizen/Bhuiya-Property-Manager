@@ -148,7 +148,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 7. GOOGLE DRIVE CLOUD STORAGE & SYSTEM INTEGRATIONS
+    // 7. CLOUD STORAGE & SYSTEM INTEGRATIONS
     // =========================================================================
 
     // File metadata records (read allowed for authorized workspace readers; writes only via backend API)

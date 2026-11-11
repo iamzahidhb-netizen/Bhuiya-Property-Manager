@@ -15,6 +15,7 @@ import type { SettingsCategoryId } from '../components/settings/settingsCategory
 export type NavSection =
   | 'home'
   | 'accounts'
+  | 'documents'
   | 'profile'
   | 'settings'
   | 'rent-deposit'
@@ -82,6 +83,7 @@ export function computePageKey(state: NavState): string {
   if (state.section === 'accounts') {
     return state.drillDownView ? `accounts-${state.drillDownView}` : 'accounts-home';
   }
+  if (state.section === 'documents') return 'documents';
   if (state.drillDownView) {
     return `accounts-${state.drillDownView}`;
   }
@@ -95,6 +97,7 @@ function computeHash(state: NavState): string {
   if (state.section === 'accounts') {
     return state.drillDownView ? `#/accounts/${state.drillDownView}` : '#/accounts';
   }
+  if (state.section === 'documents') return '#/documents';
   if (state.drillDownView) {
     return `#/accounts/${state.drillDownView}`;
   }
@@ -121,6 +124,14 @@ export function parseStateFromHash(hash: string): NavState {
     return {
       section: 'accounts',
       drillDownView: drill || null,
+      settingsCategory: null,
+      preSelectedTenantId: null,
+    };
+  }
+  if (hash === '#/documents') {
+    return {
+      section: 'documents',
+      drillDownView: null,
       settingsCategory: null,
       preSelectedTenantId: null,
     };

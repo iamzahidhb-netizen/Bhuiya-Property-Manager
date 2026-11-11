@@ -6,8 +6,10 @@ import { formatLocalizedCurrency } from '../../utils/banglaFormat';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAppNavigation } from '../../contexts/NavigationContext';
+import { SyncStatusBar } from '../ui/SyncStatusBar';
+import { getAllItems, STORES } from '../../lib/offlineDb';
 import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
-import { DriveFileUpload } from '../storage/DriveFileUpload';
+import { StorageFileUpload } from '../storage/StorageFileUpload';
 import {
   CreditCard,
   ArrowLeft,
@@ -102,6 +104,30 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
   const useBanglaNumerals = settings.languageRegion.useBanglaNumerals;
   const isBn = currentLanguage === 'bn';
 
+  const [cachedTenants, setCachedTenants] = useState<Tenant[]>([]);
+
+  useEffect(() => {
+    if (tenants.length > 0) return;
+
+    let isMounted = true;
+    const loadCachedTenants = async () => {
+      await Promise.resolve();
+      try {
+        const cached = await getAllItems<Tenant>(STORES.TENANTS);
+        if (isMounted && cached.length > 0) setCachedTenants(cached);
+      } catch (err) {
+        console.error('Error loading cached tenants:', err);
+      }
+    };
+
+    void loadCachedTenants();
+    return () => {
+      isMounted = false;
+    };
+  }, [tenants.length]);
+
+  const localTenants = tenants.length > 0 ? tenants : cachedTenants;
+
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
   const [customAmount, setCustomAmount] = useState<number | '' | null>(null);
   const [paymentDate, setPaymentDate] = useState<string>(() =>
@@ -118,12 +144,13 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
     tenantName: string;
     paymentMethod: PaymentMethod;
     paymentDate: string;
+    isOffline?: boolean;
   } | null>(null);
 
   // Active tenant derived from selection or props
   const effectiveTenantId =
-    selectedTenantId || preSelectedTenantId || (tenants.length > 0 ? tenants[0].id : '');
-  const currentTenant = tenants.find((item) => item.id === effectiveTenantId) || null;
+    selectedTenantId || preSelectedTenantId || (localTenants.length > 0 ? localTenants[0].id : '');
+  const currentTenant = localTenants.find((item) => item.id === effectiveTenantId) || null;
 
   // Active bill for the tenant
   const currentBill = currentTenant
@@ -302,13 +329,6 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleBackRequest}
-            className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-          >
-            {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
-          </button>
         </div>
       </header>
 
@@ -316,6 +336,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
       {/* Main Content Area: Responsive Form Container (Centered Max-W-XL)     */}
       {/* ===================================================================== */}
       <main className="max-w-xl w-full mx-auto px-3 sm:px-5 py-3 sm:py-4 flex-1">
+        <SyncStatusBar className="mb-3" />
         {successInfo ? (
           /* ================================================================= */
           /* Full-Page Success & Receipt Card View                             */
@@ -395,9 +416,10 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
               <button
                 type="button"
                 onClick={onBack || goBack}
-                className="w-full sm:w-1/2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-md shadow-emerald-600/25 transition cursor-pointer"
+                aria-label={isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+                className="h-12 w-12 rounded-full border border-[var(--hyper-green)]/40 bg-transparent text-[var(--hyper-green)] hover:bg-[var(--hyper-green-bg)] transition cursor-pointer flex items-center justify-center"
               >
-                {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -584,13 +606,13 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
                 </div>
               </div>
 
-              {/* Field 6: Google Drive Payment Proof / Receipt Attachment */}
+              {/* Field 6: Payment Proof / Receipt Attachment */}
               <div className="pt-1">
-                <DriveFileUpload
+                <StorageFileUpload
                   category="payment_proof"
                   tenantId={effectiveTenantId || undefined}
                   label={isBn ? '৬. রসিদ / পেমেন্ট প্রুফ (ঐচ্ছিক)' : '6. Payment Proof / Receipt (Optional)'}
-                  description={isBn ? 'Google Drive ক্লাউড ব্যাকআপ' : 'Google Drive cloud vault'}
+                  description={isBn ? 'ব্যক্তিগত Cloudflare R2 স্টোরেজ' : 'Private Cloudflare R2 storage'}
                 />
               </div>
 

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { type ModuleConfig, DEFAULT_SETTINGS } from '../../types/settings';
@@ -94,9 +95,7 @@ export const ModuleManagerSettings: React.FC<{ onBack: () => void }> = ({ onBack
             {isBn ? 'কোর, ফিন্যান্স এবং অ্যাডমিন মডিউল দৃশ্যমানতা ও বিন্যাস' : 'Organize Core, Finance and Admin modules'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* RBAC Independence Notice */}

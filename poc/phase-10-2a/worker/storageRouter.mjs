@@ -1,43 +1,18 @@
 /**
- * Google Drive Secure Storage Router for Cloudflare Pages Worker
- * 
- * Implements:
- * - /api/storage/drive/status
- * - /api/storage/drive/connect
- * - /api/storage/drive/callback
- * - /api/storage/drive/disconnect
- * - /api/storage/drive/test
- * - /api/storage/files/upload
- * - /api/storage/files
- * - /api/storage/files/:id
- * - /api/storage/files/:id/preview
- * - /api/storage/files/:id/download
- * - /api/storage/files/:id (DELETE)
+ * Private Cloudflare R2 storage router.
  */
 
 import {
-  generateOAuthUrl,
-  exchangeCodeForTokens,
-  refreshAccessToken,
-  getConnectedUserInfo,
-  initializeFolderStructure,
-  resolveFolderIdForCategory,
-  uploadFileToDrive,
-  downloadFileFromDrive,
-  deleteFileFromDrive,
-  revokeGoogleToken
-} from './googleDriveService.mjs';
-import {
-  encryptAesGcm,
-  decryptAesGcm,
-  signOAuthState,
-  verifyOAuthState,
-  base64ToBuffer
-} from './cryptoUtil.mjs';
+  checkR2Health,
+  createPresignedDownload,
+  createPresignedUpload,
+  deleteR2Object,
+  headR2Object,
+  UPLOAD_URL_TTL_SECONDS,
+  sha256HexToBase64
+} from './r2Service.mjs';
 import { jsonResponse, errorResponse } from '../workerRouter.mjs';
 
-const INTEGRATIONS_COLLECTION = 'system_integrations';
-const DRIVE_DOC_ID = 'google_drive';
 const STORAGE_FILES_COLLECTION = 'storageFiles';
 const AUDIT_LOGS_COLLECTION = 'storage_audit_logs';
 
@@ -59,6 +34,136 @@ const ALLOWED_CATEGORIES = [
 ];
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp'
+]);
+const STORAGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,150}$/;
+const CLIENT_FILE_ID_PATTERN = /^file_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasPermission(authContext, ...permissionNames) {
+  if (authContext?.isMasterAdmin) return true;
+  return permissionNames.some((permission) => authContext?.permissions?.[permission] === true);
+}
+
+function canUploadCategory(authContext, category) {
+  if (authContext?.isMasterAdmin) return true;
+  if (['rent_receipt', 'payment_proof'].includes(category)) {
+    return hasPermission(authContext, 'canCollectRent', 'collectRent', 'manageRentReceipts');
+  }
+  if (category === 'expense_invoice') {
+    return hasPermission(authContext, 'canRecordExpenses', 'addExpense');
+  }
+  if (['monthly_report', 'yearly_report', 'tax_summary'].includes(category)) {
+    return hasPermission(authContext, 'exportReports');
+  }
+  return hasPermission(
+    authContext,
+    'canManageTenants',
+    'manageTenants',
+    'createTenant',
+    'updateTenant',
+    'updateProperty'
+  );
+}
+
+function belongsToWorkspace(record, workspaceId, uid) {
+  if (record?.workspaceId) return record.workspaceId === workspaceId;
+  return Boolean(record?.ownerUid && record.ownerUid === uid);
+}
+
+function canAccessFileRecord(record, authContext) {
+  return record?.storageProvider === 'cloudflare-r2' &&
+    record.workspaceId === authContext.workspaceId;
+}
+
+async function assertWorkspaceEntity(firestore, collection, id, authContext) {
+  if (!id) return null;
+  if (!STORAGE_ID_PATTERN.test(id)) {
+    const err = new Error(`Invalid ${collection} identifier`);
+    err.code = 'INVALID_ARGUMENT';
+    err.status = 400;
+    throw err;
+  }
+  const document = await firestore.getDocument(collection, id);
+  if (!document?.data || !belongsToWorkspace(document.data, authContext.workspaceId, authContext.callerUid)) {
+    const err = new Error(`${collection} record is unavailable in the active workspace`);
+    err.code = 'NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  return document.data;
+}
+
+async function validateFileScope(firestore, authContext, { propertyId, tenantId, unitId }) {
+  let resolvedPropertyId = propertyId || null;
+  if (tenantId) {
+    const tenant = await assertWorkspaceEntity(firestore, 'tenants', tenantId, authContext);
+    if (resolvedPropertyId && tenant.propertyId !== resolvedPropertyId) {
+      const err = new Error('Tenant does not belong to the requested property');
+      err.code = 'INVALID_ARGUMENT';
+      err.status = 400;
+      throw err;
+    }
+    resolvedPropertyId = tenant.propertyId || resolvedPropertyId;
+  }
+  if (resolvedPropertyId) {
+    await assertWorkspaceEntity(firestore, 'properties', resolvedPropertyId, authContext);
+  }
+  if (unitId) {
+    const unit = await assertWorkspaceEntity(firestore, 'units', unitId, authContext);
+    if (resolvedPropertyId && unit.propertyId !== resolvedPropertyId) {
+      const err = new Error('Unit does not belong to the requested property');
+      err.code = 'INVALID_ARGUMENT';
+      err.status = 400;
+      throw err;
+    }
+    resolvedPropertyId = unit.propertyId || resolvedPropertyId;
+  }
+  return resolvedPropertyId;
+}
+
+function createR2ObjectKey({ fileId, category, propertyId, tenantId, uploadedAt }) {
+  const segments = ['property-manager'];
+  if (propertyId) segments.push('properties', propertyId);
+  if (tenantId) segments.push('tenants', tenantId);
+
+  const date = new Date(uploadedAt);
+  const year = String(date.getUTCFullYear());
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const categoryDirectory = {
+    nid: 'documents',
+    tenant_photo: 'images',
+    personal_document: 'documents',
+    rental_agreement: 'agreements',
+    agreement_renewal: 'agreements',
+    rent_receipt: `rent-receipts/${year}/${month}`,
+    expense_invoice: 'documents',
+    payment_proof: 'documents',
+    property_document: 'documents',
+    maintenance_photo: 'images',
+    monthly_report: 'documents',
+    yearly_report: 'documents',
+    tax_summary: 'documents',
+    other: 'documents'
+  }[category];
+
+  if (!propertyId && !tenantId) segments.push('application');
+  segments.push(categoryDirectory, fileId);
+  return segments.join('/');
+}
+
+function jsonResponseNoStore(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
 
 /**
  * Helper to record storage audit logs in Firestore.
@@ -81,198 +186,14 @@ async function recordStorageAudit(firestore, { actorUid, action, fileRecordId, r
 }
 
 /**
- * Retrieves valid Google Drive access token from stored encrypted refresh token.
- */
-/**
- * Resolves Google Drive OAuth secrets with automatic 256-bit AES key derivation and Firestore fallback.
- */
-export async function resolveDriveSecrets(env, firestore, config = null) {
-  let clientId = env.GOOGLE_DRIVE_CLIENT_ID || null;
-  let clientSecret = env.GOOGLE_DRIVE_CLIENT_SECRET || null;
-  let encKey = env.DRIVE_ENCRYPTION_KEY || null;
-
-  // 1. Check if configured in Firestore system_integrations/google_drive
-  if ((!clientId || !clientSecret || !encKey) && firestore) {
-    try {
-      const doc = await firestore.getDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID);
-      if (doc?.data) {
-        if (!clientId && doc.data.clientId) clientId = doc.data.clientId;
-        if (!clientSecret && doc.data.clientSecret) clientSecret = doc.data.clientSecret;
-        if (!encKey && doc.data.encryptionKey) encKey = doc.data.encryptionKey;
-      }
-    } catch (_) {}
-  }
-
-  // 2. Automatically derive cryptographically secure 256-bit encryption key from service account private key if not set
-  if (!encKey) {
-    const rawKey = config?.credentials?.private_key || env.FIREBASE_SERVICE_ACCOUNT_KEY || env.FIREBASE_PRIVATE_KEY || 'bhuiya-property-staging-vault-secret';
-    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawKey));
-    const bytes = new Uint8Array(hash);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    encKey = btoa(binary);
-  }
-
-  return { clientId, clientSecret, encKey };
-}
-
-async function getDriveAuthContext(env, firestore, config = null) {
-  const { clientId, clientSecret, encKey } = await resolveDriveSecrets(env, firestore, config);
-
-  if (!clientId || !clientSecret) {
-    const err = new Error('Google Drive Client ID বা Client Secret পাওয়া যায়নি। অনুগ্রহ করে সেটিংস থেকে সেট করুন।');
-    err.code = 'DRIVE_CONFIG_MISSING';
-    err.status = 503;
-    throw err;
-  }
-
-  // Support injected mock integration in tests
-  if (env.__MOCK_DRIVE_INTEGRATION__) {
-    return {
-      accessToken: 'mock-access-token',
-      folders: env.__MOCK_DRIVE_INTEGRATION__.folders || {},
-      integration: env.__MOCK_DRIVE_INTEGRATION__
-    };
-  }
-
-  if (!firestore) {
-    throw new Error('Database client unavailable');
-  }
-
-  const doc = await firestore.getDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID);
-  const data = doc?.data || null;
-
-  if (!data || !data.connected || !data.encryptedRefreshToken) {
-    const err = new Error('Google Drive is not connected. Please connect Google Drive in Settings.');
-    err.code = 'DRIVE_NOT_CONNECTED';
-    err.status = 400;
-    throw err;
-  }
-
-  let refreshToken;
-  try {
-    refreshToken = await decryptAesGcm(
-      { ciphertext: data.encryptedRefreshToken, iv: data.encryptionIv },
-      encKey
-    );
-  } catch (decErr) {
-    const err = new Error('Failed to decrypt stored Google Drive credentials');
-    err.code = 'DECRYPTION_FAILED';
-    err.status = 500;
-    throw err;
-  }
-
-  const { accessToken } = await refreshAccessToken(
-    { refreshToken, clientId, clientSecret },
-    env.FETCH_IMPL || fetch
-  );
-
-  return {
-    accessToken,
-    folders: data.folders || {},
-    integration: data
-  };
-}
-
-/**
  * Storage API Request Dispatcher
  */
 export async function handleStorageRequest(request, pathname, env, ctx, workerContext) {
   const method = request.method;
   const url = new URL(request.url);
   const firestore = workerContext.firestore;
-  const authContext = workerContext.authContext; // null for callback
-  const verifiedUser = workerContext.verifiedUser; // null for callback
-
-  // =========================================================================
-  // 1. GET /api/storage/drive/callback (OAuth Redirect Callback)
-  // =========================================================================
-  if (pathname === '/api/storage/drive/callback' && method === 'GET') {
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const error = url.searchParams.get('error');
-
-    const appOrigin = url.origin;
-
-    if (error) {
-      await recordStorageAudit(firestore, {
-        actorUid: null,
-        action: 'drive_connect_denied',
-        result: 'failed',
-        details: { error }
-      });
-      return Response.redirect(`${appOrigin}/?storage_error=${encodeURIComponent(error)}`, 302);
-    }
-
-    if (!code || !state) {
-      return errorResponse('INVALID_ARGUMENT', 'Missing OAuth code or state parameter', 400);
-    }
-
-    const encKey = env.DRIVE_ENCRYPTION_KEY;
-    const clientId = env.GOOGLE_DRIVE_CLIENT_ID;
-    const clientSecret = env.GOOGLE_DRIVE_CLIENT_SECRET;
-    const redirectUri = env.GOOGLE_DRIVE_REDIRECT_URI || `${url.origin}/api/storage/drive/callback`;
-
-    try {
-      const statePayload = await verifyOAuthState(state, encKey);
-      const actorUid = statePayload.callerUid;
-
-      const tokens = await exchangeCodeForTokens(
-        { code, clientId, clientSecret, redirectUri },
-        env.FETCH_IMPL || fetch
-      );
-
-      if (!tokens.refreshToken) {
-        throw new Error('Google did not return a refresh token. Please re-authorize with consent prompt.');
-      }
-
-      const userInfo = await getConnectedUserInfo(tokens.accessToken, env.FETCH_IMPL || fetch);
-
-      // Initialize full 5-group folder structure
-      const folderTree = await initializeFolderStructure(tokens.accessToken, env.FETCH_IMPL || fetch);
-
-      // Encrypt refresh token
-      const encResult = await encryptAesGcm(tokens.refreshToken, encKey);
-
-      const now = new Date().toISOString();
-      const integrationDoc = {
-        connected: true,
-        connectedEmail: userInfo.email,
-        connectedBy: actorUid,
-        connectedAt: now,
-        lastCheckedAt: now,
-        status: 'active',
-        scope: tokens.scope,
-        rootFolderId: folderTree.rootId,
-        folders: folderTree.folders,
-        encryptedRefreshToken: encResult.ciphertext,
-        encryptionIv: encResult.iv,
-        updatedAt: now
-      };
-
-      if (firestore) {
-        await firestore.setDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID, integrationDoc);
-      }
-
-      await recordStorageAudit(firestore, {
-        actorUid,
-        action: 'drive_connected',
-        result: 'success',
-        details: { email: userInfo.email }
-      });
-
-      return Response.redirect(`${appOrigin}/?storage=connected`, 302);
-    } catch (cbErr) {
-      console.error('OAuth Callback Error:', cbErr);
-      await recordStorageAudit(firestore, {
-        actorUid: null,
-        action: 'drive_callback_failed',
-        result: 'failed',
-        details: { message: cbErr.message }
-      });
-      return Response.redirect(`${appOrigin}/?storage_error=${encodeURIComponent(cbErr.message)}`, 302);
-    }
-  }
+  const authContext = workerContext.authContext;
+  const verifiedUser = workerContext.verifiedUser;
 
   // All remaining storage routes require authenticated session
   if (!verifiedUser) {
@@ -281,218 +202,45 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
 
   const callerUid = verifiedUser.uid;
   const isMasterAdmin = authContext?.isMasterAdmin || false;
-
-  // =========================================================================
-  // 2. GET /api/storage/drive/status
-  // =========================================================================
-  if (pathname === '/api/storage/drive/status' && method === 'GET') {
-    if (env.__MOCK_DRIVE_INTEGRATION__) {
-      return jsonResponse({
-        connected: env.__MOCK_DRIVE_INTEGRATION__.connected,
-        connectedEmail: env.__MOCK_DRIVE_INTEGRATION__.connectedEmail,
-        connectedAt: env.__MOCK_DRIVE_INTEGRATION__.connectedAt,
-        lastCheckedAt: env.__MOCK_DRIVE_INTEGRATION__.lastCheckedAt,
-        status: env.__MOCK_DRIVE_INTEGRATION__.status,
-        rootFolderId: env.__MOCK_DRIVE_INTEGRATION__.rootFolderId,
-        folderCount: Object.keys(env.__MOCK_DRIVE_INTEGRATION__.folders || {}).length
-      });
-    }
-
-    if (!firestore) {
-      return errorResponse('SERVICE_UNAVAILABLE', 'Database unavailable', 503);
-    }
-
-    const doc = await firestore.getDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID);
-    const data = doc?.data || null;
-
-    const secrets = await resolveDriveSecrets(env, firestore, workerContext?.config);
-    const hasConfig = Boolean(secrets.clientId && secrets.clientSecret);
-
-    if (!data || !data.connected) {
-      return jsonResponse({
-        connected: false,
-        status: 'disconnected',
-        hasConfig,
-        clientId: secrets.clientId ? `${secrets.clientId.slice(0, 12)}...` : null
-      });
-    }
-
-    return jsonResponse({
-      connected: true,
-      connectedEmail: data.connectedEmail || null,
-      connectedBy: data.connectedBy || null,
-      connectedAt: data.connectedAt || null,
-      lastCheckedAt: data.lastCheckedAt || null,
-      status: data.status || 'active',
-      rootFolderId: data.rootFolderId || null,
-      folderCount: Object.keys(data.folders || {}).length
-    });
+  const workspaceId = authContext?.workspaceId;
+  if (!workspaceId) {
+    return errorResponse('PERMISSION_DENIED', 'Verified workspace context is required for storage operations', 403);
   }
 
-  // =========================================================================
-  // 3. POST /api/storage/drive/connect (Master Admin ONLY)
-  // =========================================================================
-  if (pathname === '/api/storage/drive/connect' && method === 'POST') {
-    if (!isMasterAdmin) {
-      return errorResponse('PERMISSION_DENIED', 'Master Admin role required to connect Google Drive', 403);
-    }
-
-    const { clientId, encKey } = await resolveDriveSecrets(env, firestore, workerContext?.config);
-    const redirectUri = env.GOOGLE_DRIVE_REDIRECT_URI || `${url.origin}/api/storage/drive/callback`;
-
-    if (!clientId) {
-      return errorResponse(
-        'CONFIG_ERROR',
-        'Google Drive Client ID পাওয়া যায়নি। অনুগ্রহ করে Settings থেকে Client ID ও Secret প্রদান করুন।',
-        503
-      );
-    }
-
-    const state = await signOAuthState(
-      { callerUid, workspaceId: authContext.workspaceId || 'workspace_bhuiya_family' },
-      encKey
-    );
-
-    const authUrl = generateOAuthUrl({ clientId, redirectUri, state });
-    return jsonResponse({ success: true, url: authUrl, authUrl });
-  }
-
-  // =========================================================================
-  // 3.1 POST /api/storage/drive/configure (Master Admin ONLY)
-  // =========================================================================
-  if (pathname === '/api/storage/drive/configure' && method === 'POST') {
-    if (!isMasterAdmin) {
-      return errorResponse('PERMISSION_DENIED', 'Master Admin role required to configure Google Drive', 403);
-    }
-
-    let payload = {};
+  if (pathname === '/api/storage/health' && method === 'GET') {
     try {
-      payload = await request.json();
-    } catch (_) {
-      return errorResponse('INVALID_ARGUMENT', 'Invalid JSON payload', 400);
-    }
-
-    const { clientId, clientSecret } = payload;
-    if (!clientId || !clientSecret) {
-      return errorResponse('INVALID_ARGUMENT', 'Client ID এবং Client Secret আবশ্যক', 400);
-    }
-
-    if (!firestore) {
-      return errorResponse('SERVICE_UNAVAILABLE', 'Database client unavailable', 503);
-    }
-
-    const existingDoc = await firestore.getDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID);
-    const existingData = existingDoc?.data || {};
-
-    const updatedData = {
-      ...existingData,
-      clientId: clientId.trim(),
-      clientSecret: clientSecret.trim(),
-      configuredAt: new Date().toISOString(),
-      configuredBy: callerUid
-    };
-
-    if (existingDoc) {
-      await firestore.updateDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID, updatedData);
-    } else {
-      await firestore.createDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID, updatedData);
-    }
-
-    return jsonResponse({ success: true, message: 'Google Drive credentials configured successfully' });
-  }
-
-  // =========================================================================
-  // 4. POST /api/storage/drive/disconnect (Master Admin ONLY)
-  // =========================================================================
-  if (pathname === '/api/storage/drive/disconnect' && method === 'POST') {
-    if (!isMasterAdmin) {
-      return errorResponse('PERMISSION_DENIED', 'Master Admin role required to disconnect Google Drive', 403);
-    }
-
-    if (env.__MOCK_DRIVE_INTEGRATION__) {
-      env.__MOCK_DRIVE_INTEGRATION__.connected = false;
-      env.__MOCK_DRIVE_INTEGRATION__.status = 'disconnected';
-      return jsonResponse({ success: true, disconnected: true });
-    }
-
-    if (firestore) {
-      const doc = await firestore.getDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID);
-      const data = doc?.data || null;
-
-      if (data?.encryptedRefreshToken && env.DRIVE_ENCRYPTION_KEY) {
-        try {
-          const refreshToken = await decryptAesGcm(
-            { ciphertext: data.encryptedRefreshToken, iv: data.encryptionIv },
-            env.DRIVE_ENCRYPTION_KEY
-          );
-          await revokeGoogleToken(refreshToken, env.FETCH_IMPL || fetch);
-        } catch (_) {}
-      }
-
-      await firestore.setDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID, {
-        connected: false,
-        status: 'disconnected',
-        disconnectedAt: new Date().toISOString(),
-        disconnectedBy: callerUid
+      await checkR2Health(env);
+      return jsonResponseNoStore({ success: true, provider: 'cloudflare-r2', status: 'available' });
+    } catch (healthErr) {
+      console.error('[storage] R2 health check failed', {
+        name: healthErr.name || 'Error',
+        code: healthErr.code || null,
+        status: healthErr.$metadata?.httpStatusCode || healthErr.status || null,
+        message: typeof healthErr.message === 'string' ? healthErr.message.slice(0, 160) : null,
+        requestId: healthErr.$metadata?.requestId || null
       });
-    }
-
-    await recordStorageAudit(firestore, {
-      actorUid: callerUid,
-      action: 'drive_disconnected',
-      result: 'success'
-    });
-
-    return jsonResponse({ success: true, disconnected: true });
-  }
-
-  // =========================================================================
-  // 5. POST /api/storage/drive/test (Master Admin ONLY)
-  // =========================================================================
-  if (pathname === '/api/storage/drive/test' && method === 'POST') {
-    if (!isMasterAdmin) {
-      return errorResponse('PERMISSION_DENIED', 'Master Admin role required to test connection', 403);
-    }
-
-    try {
-      const driveAuth = await getDriveAuthContext(env, firestore);
-      const userInfo = await getConnectedUserInfo(driveAuth.accessToken, env.FETCH_IMPL || fetch);
-
-      const now = new Date().toISOString();
-      if (firestore) {
-        await firestore.updateDocument(INTEGRATIONS_COLLECTION, DRIVE_DOC_ID, {
-          lastCheckedAt: now,
-          status: 'active'
-        });
-      }
-
-      return jsonResponse({
-        success: true,
-        status: 'active',
-        connectedEmail: userInfo.email,
-        folderCount: Object.keys(driveAuth.folders || {}).length,
-        checkedAt: now
-      });
-    } catch (testErr) {
-      return errorResponse(testErr.code || 'TEST_FAILED', testErr.message, testErr.status || 500);
+      const status = healthErr.status || (healthErr.code === 'R2_NOT_CONFIGURED' ? 503 : 502);
+      return errorResponse(healthErr.code || 'R2_UNAVAILABLE', 'Cloudflare R2 is unavailable', status);
     }
   }
 
-  // =========================================================================
-  // 6. POST /api/storage/files/upload (Manager / Master Admin)
-  // =========================================================================
-  if (pathname === '/api/storage/files/upload' && method === 'POST') {
+  if (pathname === '/api/storage/upload/initiate' && method === 'POST') {
     let payload;
     try {
       payload = await request.json();
     } catch {
       return errorResponse('INVALID_ARGUMENT', 'Request body must be valid JSON', 400);
     }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return errorResponse('INVALID_ARGUMENT', 'Request body must be a JSON object', 400);
+    }
 
     const {
-      fileData,
+      fileId,
       fileName,
       mimeType,
+      fileSize,
+      fileHash,
       category,
       tenantId,
       propertyId,
@@ -500,96 +248,233 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
       voucherId
     } = payload;
 
-    if (!fileData || !fileName || !category) {
-      return errorResponse('INVALID_ARGUMENT', 'fileData (base64), fileName, and category are required', 400);
+    if (!CLIENT_FILE_ID_PATTERN.test(fileId || '')) {
+      return errorResponse('INVALID_ARGUMENT', 'A client-generated file ID is required', 400);
     }
-
+    if (
+      typeof fileName !== 'string' ||
+      !fileName.trim() ||
+      fileName.length > 255 ||
+      /[\u0000-\u001f\u007f]/.test(fileName)
+    ) {
+      return errorResponse('INVALID_ARGUMENT', 'A valid original file name is required', 400);
+    }
     if (!ALLOWED_CATEGORIES.includes(category)) {
-      return errorResponse('INVALID_ARGUMENT', `Invalid category "${category}". Allowed: ${ALLOWED_CATEGORIES.join(', ')}`, 400);
+      return errorResponse('INVALID_ARGUMENT', `Invalid storage category "${category}"`, 400);
+    }
+    if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+      return errorResponse('INVALID_ARGUMENT', 'Unsupported file type', 415);
+    }
+    if (!Number.isSafeInteger(fileSize) || fileSize < 1 || fileSize > MAX_FILE_SIZE) {
+      return errorResponse('FILE_TOO_LARGE', 'File must be between 1 byte and 25 MiB', 400);
+    }
+    if (!/^[0-9a-f]{64}$/i.test(fileHash || '')) {
+      return errorResponse('INVALID_ARGUMENT', 'A SHA-256 file hash is required', 400);
+    }
+    if ([tenantId, propertyId, unitId, voucherId].some((id) => id != null && (typeof id !== 'string' || !STORAGE_ID_PATTERN.test(id)))) {
+      return errorResponse('INVALID_ARGUMENT', 'Invalid property, tenant, or unit identifier', 400);
+    }
+    if (!canUploadCategory(authContext, category)) {
+      return errorResponse('PERMISSION_DENIED', 'Your workspace role cannot upload this file category', 403);
+    }
+    if (!firestore) {
+      return errorResponse('SERVICE_UNAVAILABLE', 'Database unavailable', 503);
     }
 
-    let fileBytes;
     try {
-      fileBytes = base64ToBuffer(fileData);
-    } catch {
-      return errorResponse('INVALID_ARGUMENT', 'Malformed base64 fileData', 400);
-    }
+      const resolvedPropertyId = await validateFileScope(firestore, authContext, { propertyId, tenantId, unitId });
+      const existing = await firestore.getDocument(STORAGE_FILES_COLLECTION, fileId);
+      let existingRecord = existing?.data || null;
 
-    if (fileBytes.byteLength > MAX_FILE_SIZE) {
-      return errorResponse('FILE_TOO_LARGE', `File size exceeds 25MB limit (${fileBytes.byteLength} bytes)`, 400);
-    }
-
-    try {
-      const driveAuth = await getDriveAuthContext(env, firestore);
-      const targetFolderId = resolveFolderIdForCategory(category, driveAuth.folders);
-
-      let driveResult;
-      if (env.__MOCK_DRIVE_INTEGRATION__) {
-        driveResult = {
-          driveFileId: `mock_drive_${Date.now()}`,
-          fileName,
-          mimeType: mimeType || 'application/octet-stream',
-          fileSize: fileBytes.byteLength,
-          uploadedAt: new Date().toISOString()
-        };
+      if (existingRecord) {
+        if (
+          existingRecord.workspaceId !== workspaceId ||
+          existingRecord.uploadedBy !== callerUid ||
+          existingRecord.storageProvider !== 'cloudflare-r2' ||
+          existingRecord.fileHash !== fileHash ||
+          existingRecord.fileSize !== fileSize ||
+          existingRecord.mimeType !== mimeType ||
+          existingRecord.category !== category ||
+          existingRecord.propertyId !== (resolvedPropertyId || null) ||
+          existingRecord.tenantId !== (tenantId || null)
+        ) {
+          return errorResponse('ALREADY_EXISTS', 'Upload ID is already associated with another file', 409);
+        }
+        if (existingRecord.uploadStatus === 'completed') {
+          return jsonResponseNoStore({ success: true, alreadyCompleted: true, file: { id: fileId, ...existingRecord } });
+        }
+        if (existingRecord.uploadStatus === 'uploaded' || existingRecord.uploadStatus === 'verified') {
+          return jsonResponseNoStore({ success: true, needsCompletion: true, fileId });
+        }
+        if (existingRecord.uploadStatus === 'failed') {
+          return errorResponse('UPLOAD_FAILED', 'This upload intent has failed; start a new upload', 409);
+        }
       } else {
-        driveResult = await uploadFileToDrive({
-          fileName,
-          mimeType,
-          parentFolderId: targetFolderId,
-          fileBytes
-        }, driveAuth.accessToken, env.FETCH_IMPL || fetch);
+        const duplicateDocs = await firestore.queryByField(
+          STORAGE_FILES_COLLECTION,
+          'fileHash',
+          'EQUAL',
+          fileHash.toLowerCase()
+        );
+        const duplicate = duplicateDocs
+          .map((document) => ({ id: document.id, ...(document.data || {}) }))
+          .find((record) =>
+            record.workspaceId === workspaceId &&
+            record.storageProvider === 'cloudflare-r2' &&
+            record.status === 'active' &&
+            record.fileHash === fileHash.toLowerCase() &&
+            record.fileSize === fileSize &&
+            record.category === category &&
+            record.propertyId === (resolvedPropertyId || null) &&
+            record.tenantId === (tenantId || null)
+          );
+        if (duplicate) {
+          return jsonResponseNoStore({ success: true, duplicate: true, file: duplicate });
+        }
       }
 
-      const fileRecordId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const now = new Date().toISOString();
-
-      const fileRecord = {
-        id: fileRecordId,
-        workspaceId: authContext.workspaceId,
-        driveFileId: driveResult.driveFileId,
-        driveFolderId: targetFolderId || driveAuth.integration?.rootFolderId || null,
-        fileName,
-        originalFileName: fileName,
-        mimeType: driveResult.mimeType || mimeType || 'application/octet-stream',
-        fileSize: driveResult.fileSize || fileBytes.byteLength,
+      const normalizedHash = fileHash.toLowerCase();
+      const objectKey = existingRecord?.objectKey || createR2ObjectKey({
+        fileId,
         category,
+        propertyId: resolvedPropertyId,
         tenantId: tenantId || null,
-        propertyId: propertyId || null,
-        unitId: unitId || null,
-        voucherId: voucherId || null,
-        status: 'active',
-        uploadedBy: callerUid,
-        uploadedAt: now,
-        updatedAt: now
-      };
+        uploadedAt: now
+      });
+      const authorization = await createPresignedUpload(env, {
+        objectKey,
+        mimeType,
+        fileHash: normalizedHash
+      });
 
-      if (firestore) {
-        await firestore.createDocument(STORAGE_FILES_COLLECTION, fileRecordId, fileRecord);
+      if (!existingRecord) {
+        existingRecord = {
+          id: fileId,
+          workspaceId,
+          storageProvider: 'cloudflare-r2',
+          objectKey,
+          fileName: fileName.trim(),
+          originalFileName: fileName.trim(),
+          mimeType,
+          fileSize,
+          fileHash: normalizedHash,
+          category,
+          tenantId: tenantId || null,
+          propertyId: resolvedPropertyId || null,
+          unitId: unitId || null,
+          voucherId: voucherId || null,
+          uploadedBy: callerUid,
+          uploadedAt: now,
+          status: 'pending',
+          uploadStatus: 'authorized',
+          uploadExpiresAt: new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000).toISOString(),
+          migrationStatus: 'not-applicable'
+        };
+        await firestore.createDocument(STORAGE_FILES_COLLECTION, fileId, existingRecord);
+      } else {
+        await firestore.updateDocument(STORAGE_FILES_COLLECTION, fileId, {
+          uploadStatus: 'authorized',
+          uploadExpiresAt: new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000).toISOString(),
+          updatedAt: now
+        });
       }
 
-      await recordStorageAudit(firestore, {
-        actorUid: callerUid,
-        action: 'file_uploaded',
-        fileRecordId,
-        result: 'success',
-        details: { category, fileName, size: fileRecord.fileSize }
-      });
+      return jsonResponseNoStore({
+        success: true,
+        fileId,
+        uploadUrl: authorization.url,
+        requiredHeaders: authorization.requiredHeaders,
+        expiresIn: authorization.expiresIn
+      }, 201);
+    } catch (initErr) {
+      const status = initErr.status || 500;
+      return errorResponse(initErr.code || 'UPLOAD_INITIATION_FAILED', initErr.message, status);
+    }
+  }
 
-      return jsonResponse({ success: true, file: fileRecord }, 201);
-    } catch (uploadErr) {
+  if (pathname === '/api/storage/upload/complete' && method === 'POST') {
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return errorResponse('INVALID_ARGUMENT', 'Request body must be valid JSON', 400);
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return errorResponse('INVALID_ARGUMENT', 'Request body must be a JSON object', 400);
+    }
+    const { fileId } = payload;
+    if (!CLIENT_FILE_ID_PATTERN.test(fileId || '')) {
+      return errorResponse('INVALID_ARGUMENT', 'A valid file ID is required', 400);
+    }
+    if (!firestore) {
+      return errorResponse('SERVICE_UNAVAILABLE', 'Database unavailable', 503);
+    }
+
+    try {
+      const document = await firestore.getDocument(STORAGE_FILES_COLLECTION, fileId);
+      const fileRecord = document?.data || null;
+      if (!fileRecord || fileRecord.workspaceId !== workspaceId || fileRecord.storageProvider !== 'cloudflare-r2') {
+        return errorResponse('NOT_FOUND', 'Upload intent was not found in the active workspace', 404);
+      }
+      if (fileRecord.uploadedBy !== callerUid && !isMasterAdmin) {
+        return errorResponse('PERMISSION_DENIED', 'Only the uploader or a workspace admin can complete this upload', 403);
+      }
+      if (fileRecord.uploadStatus === 'completed') {
+        return jsonResponseNoStore({ success: true, file: { id: fileId, ...fileRecord } });
+      }
+
+      await firestore.updateDocument(STORAGE_FILES_COLLECTION, fileId, {
+        uploadStatus: 'uploaded',
+        updatedAt: new Date().toISOString()
+      });
+      const actual = await headR2Object(env, fileRecord.objectKey);
+      const expectedChecksum = fileRecord.fileHash;
+      if (
+        actual.fileSize !== fileRecord.fileSize ||
+        actual.mimeType !== fileRecord.mimeType ||
+        actual.fileHash !== expectedChecksum ||
+        (actual.checksumSha256 && actual.checksumSha256 !== sha256HexToBase64(expectedChecksum))
+      ) {
+        await firestore.updateDocument(STORAGE_FILES_COLLECTION, fileId, {
+          uploadStatus: 'failed',
+          uploadError: 'Uploaded object did not match authorized metadata',
+          updatedAt: new Date().toISOString()
+        });
+        return errorResponse('INTEGRITY_CHECK_FAILED', 'Uploaded object failed size, type, or checksum verification', 422);
+      }
+      await firestore.updateDocument(STORAGE_FILES_COLLECTION, fileId, {
+        uploadStatus: 'verified',
+        updatedAt: new Date().toISOString()
+      });
+      const completedAt = new Date().toISOString();
+      const completedRecord = {
+        status: 'active',
+        uploadStatus: 'completed',
+        completedAt,
+        updatedAt: completedAt
+      };
+      await firestore.updateDocument(STORAGE_FILES_COLLECTION, fileId, completedRecord);
       await recordStorageAudit(firestore, {
         actorUid: callerUid,
-        action: 'file_upload_failed',
-        result: 'failed',
-        details: { fileName, error: uploadErr.message }
+        action: 'r2_file_uploaded',
+        fileRecordId: fileId,
+        result: 'success',
+        details: { category: fileRecord.category, size: fileRecord.fileSize }
       });
-      return errorResponse(uploadErr.code || 'UPLOAD_FAILED', uploadErr.message, uploadErr.status || 500);
+      return jsonResponseNoStore({
+        success: true,
+        file: { id: fileId, ...fileRecord, ...completedRecord }
+      });
+    } catch (completeErr) {
+      const status = completeErr.status || (completeErr.name === 'NotFound' ? 409 : 500);
+      const code = completeErr.code || (completeErr.name === 'NotFound' ? 'OBJECT_NOT_FOUND' : 'UPLOAD_COMPLETION_FAILED');
+      return errorResponse(code, status === 409 ? 'Uploaded object is not present in R2 yet' : completeErr.message, status);
     }
   }
 
   // =========================================================================
-  // 7. GET /api/storage/files (List Files)
+  // GET /api/storage/files (List active R2 files)
   // =========================================================================
   if (pathname === '/api/storage/files' && method === 'GET') {
     const category = url.searchParams.get('category');
@@ -598,7 +483,11 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
     const voucherId = url.searchParams.get('voucherId');
 
     if (env.__MOCK_STORAGE_FILES__) {
-      let filtered = Object.values(env.__MOCK_STORAGE_FILES__).filter(f => f.status === 'active');
+      let filtered = Object.values(env.__MOCK_STORAGE_FILES__).filter(
+        (file) => file.status === 'active' &&
+          file.storageProvider === 'cloudflare-r2' &&
+          canAccessFileRecord(file, authContext)
+      );
       if (category) filtered = filtered.filter(f => f.category === category);
       if (tenantId) filtered = filtered.filter(f => f.tenantId === tenantId);
       if (propertyId) filtered = filtered.filter(f => f.propertyId === propertyId);
@@ -610,22 +499,21 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
       return errorResponse('SERVICE_UNAVAILABLE', 'Database unavailable', 503);
     }
 
-    // Query active files by workspaceId
-    let queryField = 'workspaceId';
-    let queryValue = authContext.workspaceId;
-    if (tenantId) {
-      queryField = 'tenantId';
-      queryValue = tenantId;
-    } else if (propertyId) {
-      queryField = 'propertyId';
-      queryValue = propertyId;
-    }
-
-    const docs = await firestore.queryByField(STORAGE_FILES_COLLECTION, queryField, 'EQUAL', queryValue);
-    let files = docs.map(d => ({ id: d.id, ...(d.data || {}) })).filter(f => f.status === 'active');
+    const workspaceDocs = await firestore.queryByField(STORAGE_FILES_COLLECTION, 'workspaceId', 'EQUAL', workspaceId);
+    const legacyDocs = await firestore.queryByField(STORAGE_FILES_COLLECTION, 'uploadedBy', 'EQUAL', callerUid);
+    const docsById = new Map([...workspaceDocs, ...legacyDocs].map((document) => [document.id, document]));
+    let files = [...docsById.values()]
+      .map((document) => ({ id: document.id, ...(document.data || {}) }))
+      .filter((file) => file.status === 'active' && canAccessFileRecord(file, authContext));
 
     if (category) {
       files = files.filter(f => f.category === category);
+    }
+    if (tenantId) {
+      files = files.filter(f => f.tenantId === tenantId);
+    }
+    if (propertyId) {
+      files = files.filter(f => f.propertyId === propertyId);
     }
     if (voucherId) {
       files = files.filter(f => f.voucherId === voucherId);
@@ -655,6 +543,9 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
     if (!fileRecord) {
       return errorResponse('NOT_FOUND', 'File not found or has been deleted', 404);
     }
+    if (!canAccessFileRecord(fileRecord, authContext)) {
+      return errorResponse('NOT_FOUND', 'File not found or has been deleted', 404);
+    }
 
     // 8.1 DELETE /api/storage/files/:id
     if (method === 'DELETE') {
@@ -664,8 +555,7 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
 
       try {
         if (!env.__MOCK_STORAGE_FILES__) {
-          const driveAuth = await getDriveAuthContext(env, firestore);
-          await deleteFileFromDrive(fileRecord.driveFileId, driveAuth.accessToken, env.FETCH_IMPL || fetch);
+          await deleteR2Object(env, fileRecord.objectKey);
         }
 
         const now = new Date().toISOString();
@@ -697,41 +587,24 @@ export async function handleStorageRequest(request, pathname, env, ctx, workerCo
     // 8.2 GET /api/storage/files/:id/preview or /download
     if (method === 'GET' && (subAction === 'preview' || subAction === 'download')) {
       try {
-        if (env.__MOCK_STORAGE_FILES__) {
-          return new Response('Mock File Content', {
-            status: 200,
-            headers: {
-              'Content-Type': fileRecord.mimeType || 'application/octet-stream',
-              'Content-Disposition': `${subAction === 'download' ? 'attachment' : 'inline'}; filename="${encodeURIComponent(fileRecord.fileName)}"`
-            }
-          });
-        }
-
-        const driveAuth = await getDriveAuthContext(env, firestore);
-        const driveRes = await downloadFileFromDrive(
-          fileRecord.driveFileId,
-          driveAuth.accessToken,
-          env.FETCH_IMPL || fetch
-        );
-
-        const disposition = subAction === 'download' ? 'attachment' : 'inline';
-        const responseHeaders = new Headers({
-          'Content-Type': fileRecord.mimeType || driveRes.headers.get('Content-Type') || 'application/octet-stream',
-          'Content-Disposition': `${disposition}; filename="${encodeURIComponent(fileRecord.fileName)}"`,
-          'Cache-Control': 'private, max-age=3600',
-          'X-Content-Type-Options': 'nosniff'
+        const signedDownload = await createPresignedDownload(env, {
+          objectKey: fileRecord.objectKey,
+          mimeType: fileRecord.mimeType || 'application/octet-stream',
+          fileName: fileRecord.originalFileName || fileRecord.fileName,
+          disposition: subAction === 'download' ? 'attachment' : 'inline'
         });
-
         await recordStorageAudit(firestore, {
           actorUid: callerUid,
-          action: subAction === 'download' ? 'file_downloaded' : 'file_viewed',
+          action: subAction === 'download' ? 'file_download_authorized' : 'file_preview_authorized',
           fileRecordId: fileId,
           result: 'success'
         });
-
-        return new Response(driveRes.body, {
-          status: 200,
-          headers: responseHeaders
+        return jsonResponseNoStore({
+          success: true,
+          url: signedDownload.url,
+          expiresIn: signedDownload.expiresIn,
+          mimeType: fileRecord.mimeType,
+          fileName: fileRecord.originalFileName || fileRecord.fileName
         });
       } catch (streamErr) {
         return errorResponse(streamErr.code || 'STREAM_FAILED', streamErr.message, streamErr.status || 500);

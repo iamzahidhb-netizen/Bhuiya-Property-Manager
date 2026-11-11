@@ -7,6 +7,7 @@ import {
   archiveUnit,
 } from '../../services/propertyService';
 import UnitModal from './UnitModal';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 
 interface UnitListProps {
   property: Property;
@@ -92,15 +93,11 @@ export default function UnitList({ property, ownerUid, workspaceId, onBack }: Un
       <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <button
+            <BackIconButton
               onClick={onBack}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline mb-2 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-              </svg>
-              প্রপার্টি তালিকায় ফিরে যান / Back to Properties
-            </button>
+              aria-label="প্রপার্টি তালিকায় ফিরে যান / Back to Properties"
+              className="mb-2"
+            />
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold text-slate-800">{property.name}</h2>
               <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700 border border-blue-200">

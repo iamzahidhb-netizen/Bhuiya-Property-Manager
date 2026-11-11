@@ -1,0 +1,19 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://bhuiya-property-staging.pages.dev",
+          "https://localhost"
+        ],
+        "methods": ["GET", "PUT"],
+        "headers": [
+          "Content-Type",
+          "x-amz-checksum-sha256",
+          "x-amz-meta-sha256"
+        ]
+      },
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

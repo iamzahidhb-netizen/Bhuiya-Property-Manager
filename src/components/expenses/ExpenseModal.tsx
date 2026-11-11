@@ -218,7 +218,6 @@ export default function ExpenseModal({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="যেমন: ৩য় তলার পানির পাম্প মেরামত"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-hidden focus:border-blue-500 font-medium"
                   required
                 />
@@ -236,7 +235,6 @@ export default function ExpenseModal({
                     step="any"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="0.00"
                     className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl outline-hidden focus:border-blue-500 font-bold text-slate-800"
                     required
                   />
@@ -338,7 +336,6 @@ export default function ExpenseModal({
                   type="text"
                   value={paidTo}
                   onChange={(e) => setPaidTo(e.target.value)}
-                  placeholder="যেমন: মোঃ রফিকুল ইসলাম (মিস্ত্রি)"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-hidden focus:border-blue-500"
                 />
               </div>
@@ -351,7 +348,6 @@ export default function ExpenseModal({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="খরচ সংক্রান্ত অতিরিক্ত তথ্য..."
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl outline-hidden focus:border-blue-500"
                 />
               </div>
@@ -367,7 +363,6 @@ export default function ExpenseModal({
                   type="text"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="যেমন: ভাউচার যাচাই করে টাকার পরিমাণ সংশোধন..."
                   className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl outline-hidden focus:border-amber-500 text-xs"
                   required
                 />

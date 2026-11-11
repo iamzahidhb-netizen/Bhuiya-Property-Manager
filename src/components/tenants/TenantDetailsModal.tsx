@@ -1,6 +1,6 @@
 import type { Tenant } from '../../types/tenant';
 import type { SecurityDeposit } from '../../types/finance';
-import { DriveDocumentList } from '../storage/DriveDocumentList';
+import { StorageDocumentList } from '../storage/StorageDocumentList';
 
 interface TenantDetailsModalProps {
   isOpen: boolean;
@@ -140,12 +140,12 @@ export default function TenantDetailsModal({
             )}
           </div>
 
-          {/* Google Drive Document Vault */}
+          {/* Private document storage */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-            <DriveDocumentList
+            <StorageDocumentList
               tenantId={tenant.id}
               defaultUploadCategory="nid"
-              title="ভাড়াটিয়ার ডকুমেন্টস ও চুক্তিপত্র (Google Drive)"
+              title="ভাড়াটিয়ার ডকুমেন্টস ও চুক্তিপত্র"
             />
           </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Languages, RefreshCw, Calendar, Globe } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos/FrostedGlassSelect';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -105,9 +106,7 @@ export const LanguageRegionSettings: React.FC<{ onBack: () => void }> = ({ onBac
             {isBn ? 'ভাষা, সংখ্যা বিন্যাস এবং তারিখ প্রদর্শন' : 'Application language, number & date display'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Language Selection Card */}
@@ -141,7 +140,7 @@ export const LanguageRegionSettings: React.FC<{ onBack: () => void }> = ({ onBac
             subtitleBn="সম্পূর্ণ ইন্টারফেস ভাষা পরিবর্তন করুন"
             subtitleEn="Choose interface display language"
             headerIcon={Globe}
-            headerIconBg="bg-[#1685E8]/15"
+            headerIconBg="bg-[var(--hyper-green-bg)]"
             headerIconColor="text-[#1685E8]"
             triggerTestId="language-frosted-trigger"
             modalTestId="language-frosted-modal"

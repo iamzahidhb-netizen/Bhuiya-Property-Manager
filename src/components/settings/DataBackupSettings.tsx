@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { exportToCSV } from '../../utils/exportUtils';
@@ -20,6 +21,33 @@ export const DataBackupSettings: React.FC<{ onBack: () => void }> = ({ onBack })
   const isBn = currentLanguage === 'bn';
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  const exportCards = [
+    {
+      id: 'rent',
+      titleBn: 'ভাড়া আদায় খতিয়ান',
+      titleEn: 'Rent Ledger CSV',
+      descriptionBn: 'নভেম্বর ২০২৬ পর্যন্ত',
+      descriptionEn: 'Current active records',
+      onExport: handleExportRent,
+    },
+    {
+      id: 'expenses',
+      titleBn: 'ভবন খরচ খতিয়ান',
+      titleEn: 'Expense Ledger CSV',
+      descriptionBn: 'সকল ভাউচার বিবরণ',
+      descriptionEn: 'All expense vouchers',
+      onExport: handleExportExpenses,
+    },
+    {
+      id: 'tenants',
+      titleBn: 'ভাড়াটিয়া রেজিস্টার',
+      titleEn: 'Tenants Directory CSV',
+      descriptionBn: 'সকল ভাড়াটিয়ার তথ্য',
+      descriptionEn: 'Active tenants registry',
+      onExport: handleExportTenants,
+    },
+  ].filter((card, index, cards) => cards.findIndex((item) => item.id === card.id) === index);
 
   // 1. Export Rent Ledger
   function handleExportRent() {
@@ -102,9 +130,7 @@ export const DataBackupSettings: React.FC<{ onBack: () => void }> = ({ onBack })
             {isBn ? 'এক্সেল সিএসভি খতিয়ান ও কনফিগারেশন ব্যাকআপ' : 'Export Excel CSV ledgers & preferences backup'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {importStatus && (
@@ -131,62 +157,26 @@ export const DataBackupSettings: React.FC<{ onBack: () => void }> = ({ onBack })
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Rent Ledger */}
-          <button
-            type="button"
-            onClick={handleExportRent}
-            className="p-3.5 rounded-[20px] border border-[var(--hyper-border-subtle)] bg-black/5 dark:bg-white/5 hover:bg-black/10 transition-all flex flex-col items-center gap-2 text-center cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center text-[#22B84A] group-hover:scale-110 transition-transform">
-              <Download className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-[var(--hyper-text-primary)]">
-                {isBn ? 'ভাড়া আদায় খতিয়ান' : 'Rent Ledger CSV'}
+          {exportCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              onClick={card.onExport}
+              className="p-3.5 rounded-[20px] border border-[var(--hyper-border-subtle)] bg-black/5 dark:bg-white/5 hover:bg-black/10 transition-all flex flex-col items-center gap-2 text-center cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-full bg-[var(--hyper-green-bg)] flex items-center justify-center text-[var(--hyper-green)] group-hover:scale-110 transition-transform">
+                <Download className="w-4 h-4" />
               </div>
-              <div className="text-[10px] text-[var(--hyper-text-secondary)] mt-0.5">
-                {isBn ? 'নভেম্বর ২০২৬ পর্যন্ত' : 'Current active records'}
+              <div>
+                <div className="text-sm font-bold text-[var(--hyper-text-primary)]">
+                  {isBn ? card.titleBn : card.titleEn}
+                </div>
+                <div className="text-xs text-[var(--hyper-text-secondary)] mt-0.5">
+                  {isBn ? card.descriptionBn : card.descriptionEn}
+                </div>
               </div>
-            </div>
-          </button>
-
-          {/* Expenses Ledger */}
-          <button
-            type="button"
-            onClick={handleExportExpenses}
-            className="p-3.5 rounded-[20px] border border-[var(--hyper-border-subtle)] bg-black/5 dark:bg-white/5 hover:bg-black/10 transition-all flex flex-col items-center gap-2 text-center cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center text-[#F28A24] group-hover:scale-110 transition-transform">
-              <Download className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-[var(--hyper-text-primary)]">
-                {isBn ? 'ভবন খরচ খতিয়ান' : 'Expense Ledger CSV'}
-              </div>
-              <div className="text-[10px] text-[var(--hyper-text-secondary)] mt-0.5">
-                {isBn ? 'সকল ভাউচার বিবরণ' : 'All expense vouchers'}
-              </div>
-            </div>
-          </button>
-
-          {/* Tenants Register */}
-          <button
-            type="button"
-            onClick={handleExportTenants}
-            className="p-3.5 rounded-[20px] border border-[var(--hyper-border-subtle)] bg-black/5 dark:bg-white/5 hover:bg-black/10 transition-all flex flex-col items-center gap-2 text-center cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-[#1685E8] group-hover:scale-110 transition-transform">
-              <Download className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-[var(--hyper-text-primary)]">
-                {isBn ? 'ভাড়াটিয়া রেজিস্টার' : 'Tenants Directory CSV'}
-              </div>
-              <div className="text-[10px] text-[var(--hyper-text-secondary)] mt-0.5">
-                {isBn ? 'সকল ভাড়াটিয়ার তথ্য' : 'Active tenants registry'}
-              </div>
-            </div>
-          </button>
+            </button>
+          ))}
         </div>
       </HyperCard>
 

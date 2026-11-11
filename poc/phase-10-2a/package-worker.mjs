@@ -30,7 +30,9 @@ export async function packageWorker() {
     bundle: true,
     format: 'esm',
     target: 'es2022',
-    platform: 'neutral', // Pure web platform, no Node built-ins
+    platform: 'browser',
+    mainFields: ['browser', 'module', 'main'],
+    conditions: ['browser'],
     outfile: OUT_FILE,
     minify: false,
     sourcemap: false,

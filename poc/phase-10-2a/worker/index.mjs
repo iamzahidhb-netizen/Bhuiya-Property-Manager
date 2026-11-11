@@ -238,20 +238,7 @@ export async function dispatchStorageRequest(request, env, ctx) {
   const config = getWorkerConfig(env);
   const firestore = getOrCreateFirestoreClient(env, config);
 
-  // 1. Google OAuth Callback (unauthenticated redirect from accounts.google.com)
-  if (pathname === '/api/storage/drive/callback') {
-    const workerContext = {
-      env,
-      ctx,
-      config,
-      firestore,
-      verifiedUser: null,
-      authContext: null
-    };
-    return await handleStorageRequest(request, pathname, env, ctx, workerContext);
-  }
-
-  // 2. All remaining storage endpoints require Firebase ID Token verification
+  // Storage endpoints require Firebase ID Token verification.
   const authHeader = request.headers.get('Authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!token) {
@@ -271,9 +258,16 @@ export async function dispatchStorageRequest(request, env, ctx) {
   const candidateWorkspaces = [rawWsId, 'workspace_bhuiya_family'].filter(Boolean);
 
   let member = null;
+  let resolvedWorkspaceId = null;
   for (const wsId of candidateWorkspaces) {
     member = await lookupWorkspaceMember(verifiedUser.uid, wsId, env, config);
-    if (member) break;
+    if (member) {
+      resolvedWorkspaceId = member.workspaceId || wsId;
+      break;
+    }
+  }
+  if (!member || member.status !== 'active') {
+    return errorResponse('PERMISSION_DENIED', 'An active workspace membership is required for storage access', 403);
   }
 
   const role = member?.role || 'viewer';
@@ -283,6 +277,7 @@ export async function dispatchStorageRequest(request, env, ctx) {
 
   const authContext = {
     callerUid: verifiedUser.uid,
+    workspaceId: resolvedWorkspaceId,
     role,
     isMasterAdmin,
     permissions: member?.permissions || {}

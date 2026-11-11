@@ -11,6 +11,7 @@ import LoadingScreen from './components/LoadingScreen';
 import AccessRestrictedScreen from './components/AccessRestrictedScreen';
 import { OfflineStatusBanner } from './components/common/OfflineStatusBanner';
 import { HyperOSComponentShowcase } from './components/ui/hyperos/HyperOSComponentShowcase';
+import { DesignSystemGalleryWrapper } from './components/dev/DesignSystemGallery';
 import AppOpeningSplash from './components/splash/AppOpeningSplash';
 
 function AppRouter() {
@@ -18,9 +19,14 @@ function AppRouter() {
   const { membership, loading: workspaceLoading, error: workspaceError, retryMembershipLookup } = useWorkspace();
   const [showSplash, setShowSplash] = useState(true);
 
-  // Dev-only Preview Mode for Xiaomi HyperOS Component Showcase (stripped in production builds)
-  if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.search.includes('preview=hyperos')) {
-    return <HyperOSComponentShowcase />;
+  // Dev-only Preview Modes (completely stripped in production builds)
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    if (window.location.search.includes('preview=gallery') || window.location.pathname === '/gallery') {
+      return <DesignSystemGalleryWrapper />;
+    }
+    if (window.location.search.includes('preview=hyperos')) {
+      return <HyperOSComponentShowcase />;
+    }
   }
 
   // 1. YouTube-style Opening Brand Reveal Animation on Cold Start

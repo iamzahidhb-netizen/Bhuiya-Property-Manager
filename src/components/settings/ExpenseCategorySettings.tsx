@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { type ExpenseCategoryConfig, DEFAULT_SETTINGS } from '../../types/settings';
@@ -93,9 +94,7 @@ export const ExpenseCategorySettings: React.FC<{ onBack: () => void }> = ({ onBa
             {isBn ? 'ভবন খরচের খাতসমূহ সক্রিয়, নিষ্ক্রিয় ও নতুন খাত যোগ' : 'Manage building expense categories & tags'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Safety Notice: Non-destructive Archive */}

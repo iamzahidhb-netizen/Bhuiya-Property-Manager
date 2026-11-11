@@ -260,7 +260,7 @@ async function run() {
   }
 
   // 3.5 Frontend propertyService.ts inspection
-  const propertyServiceCode = fs.readFileSync('src/services/propertyService.ts', 'utf8');
+  const propertyServiceCode = fs.readFileSync('src/services/propertyService.ts', 'utf8').replace(/\r\n/g, '\n');
   assert(propertyServiceCode.includes("createCallable<PropertyInput, { success: boolean; propertyId: string }>(\n    'createPropertyCallable'"), 'frontend createProperty calls createPropertyCallable');
   assert(propertyServiceCode.includes("'updatePropertyCallable'"), 'frontend updateProperty calls updatePropertyCallable');
   assert(propertyServiceCode.includes("'archivePropertyCallable'"), 'frontend archiveProperty calls archivePropertyCallable');
@@ -295,6 +295,10 @@ async function run() {
   const rulesCode = fs.readFileSync('poc/phase-10-2a/firestore.workspace-candidate.rules', 'utf8');
   assert(rulesCode.includes("('ownerUid' in resource.data && resource.data.ownerUid == request.auth.uid)"), 'Firestore rules preserve backward-compatible ownerUid read access');
   assert(rulesCode.includes("('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))"), 'Firestore rules enforce modern workspaceId access');
+
+  const memberManagementCode = fs.readFileSync('src/components/members/MemberManagementModal.tsx', 'utf8');
+  assert(!memberManagementCode.includes('112233'), 'Member UI does not expose a shared sample password');
+  assert(!actionRegistryCode.includes('TemporaryPass2026!'), 'Legacy member invite never creates accounts with a shared default password');
 
   console.log('\n========================================================================');
   console.log(`FINAL REMEDIATION RESULTS: ${passed} PASSED, ${failed} FAILED`);

@@ -8,6 +8,7 @@ import {
   RefreshCw,
   House,
   BookOpen,
+  Files,
   ReceiptText,
   Wallet,
   UserRound,
@@ -15,6 +16,8 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { type NavItemConfig, DEFAULT_SETTINGS } from '../../types/settings';
@@ -31,6 +34,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
   function moveNavItem(index: number, direction: 'up' | 'down') {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= navItems.length) return;
+    if (navItems[index].id === 'profile' || navItems[targetIdx].id === 'profile') return;
     const next = [...navItems];
     const [moved] = next.splice(index, 1);
     next.splice(targetIdx, 0, moved);
@@ -38,13 +42,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
   }
 
   function toggleNavItem(id: string) {
-    // Safety check: Profile item can never be hidden (to prevent lockouts from settings)
     if (id === 'profile') return;
-
-    // Safety check: At least 2 navigation items must remain visible
-    const visibleCount = navItems.filter((item) => item.visible).length;
-    const current = navItems.find((item) => item.id === id);
-    if (current?.visible && visibleCount <= 2) return;
 
     setNavItems(
       navItems.map((item) => (item.id === id ? { ...item, visible: !item.visible } : item))
@@ -66,6 +64,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
   const NAV_ICONS: Record<string, React.ReactNode> = {
     home: <House className="w-4 h-4 text-[#22B84A]" />,
     accounts: <BookOpen className="w-4 h-4 text-[#1685E8]" />,
+    documents: <Files className="w-4 h-4 text-[#1685E8]" />,
     newExpense: <ReceiptText className="w-4 h-4 text-[#F28A24]" />,
     rentDeposit: <Wallet className="w-4 h-4 text-[#22B84A]" />,
     profile: <UserRound className="w-4 h-4 text-[#7655E8]" />,
@@ -82,12 +81,10 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
             {isBn ? 'নেভিগেশন ম্যানেজার' : 'Navigation Manager'}
           </h3>
           <p className="text-xs text-[var(--hyper-text-secondary)]">
-            {isBn ? 'নিচের ৫টি নেভিগেশন পিলের ক্রম ও দৃশ্যমানতা নিয়ন্ত্রণ' : 'Manage bottom floating dock items & order'}
+            {isBn ? 'নিচের নেভিগেশন পিলের ক্রম ও দৃশ্যমানতা নিয়ন্ত্রণ' : 'Manage bottom floating dock items & order'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Safety Notice */}
@@ -98,8 +95,8 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
             {isBn ? 'নিরাপত্তা নিশ্চিতকরণ: ' : 'Safety Guarantee: '}
           </span>
           {isBn
-            ? 'প্রোফাইল ও সেটিংস কখনো লুকানো যাবে না যাতে আপনি কখনো অ্যাপ কনফিগারেশন থেকে বিচ্ছিন্ন না হন।'
-            : 'Profile & Settings can never be disabled to ensure you never lose access to configuration.'}
+            ? 'প্রোফাইল স্থির থাকবে। প্রোফাইল ছাড়া অন্য যেকোনো নেভিগেশন আইটেম লুকানো যাবে।'
+            : 'Profile stays fixed. Any other navigation item can be hidden.'}
         </div>
       </div>
 
@@ -114,7 +111,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
               {isBn ? 'ডক আইটেম তালিকা' : 'Bottom Dock Items'}
             </h4>
             <p className="text-xs text-[var(--hyper-text-secondary)]">
-              {isBn ? 'তীর চিহ্নে ক্লিক করে ক্রমানুসার পরিবর্তন করুন' : 'Use arrow buttons to adjust order (1 to 5)'}
+              {isBn ? 'তীর চিহ্নে ক্লিক করে ক্রমানুসার পরিবর্তন করুন' : 'Use arrow buttons to adjust order'}
             </p>
           </div>
         </div>
@@ -141,14 +138,14 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
                         {isBn ? item.labelBn : item.labelEn}
                       </span>
                       {isProfile && (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#7655E8]/10 text-[#7655E8] border border-[#7655E8]/20">
-                          {isBn ? 'সুরক্ষিত' : 'Locked'}
-                        </span>
+                        <StatusBadge tone="info" className="px-2 py-1 text-xs">
+                          {isBn ? 'স্থির' : 'Fixed'}
+                        </StatusBadge>
                       )}
                       {item.isActionShortcut && (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        <StatusBadge tone="info" className="px-2 py-1">
                           {isBn ? 'শর্টকাট' : 'Shortcut'}
-                        </span>
+                        </StatusBadge>
                       )}
                     </div>
                     <div className="text-[10px] text-[var(--hyper-text-secondary)]">
@@ -161,7 +158,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
                   {/* Up */}
                   <button
                     type="button"
-                    disabled={idx === 0}
+                    disabled={idx === 0 || isProfile || navItems[idx - 1]?.id === 'profile'}
                     onClick={() => moveNavItem(idx, 'up')}
                     aria-label="Move Up"
                     className="w-7 h-7 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] disabled:opacity-20 cursor-pointer"
@@ -171,7 +168,7 @@ export const NavigationManagerSettings: React.FC<{ onBack: () => void }> = ({ on
                   {/* Down */}
                   <button
                     type="button"
-                    disabled={idx === navItems.length - 1}
+                    disabled={idx === navItems.length - 1 || isProfile || navItems[idx + 1]?.id === 'profile'}
                     onClick={() => moveNavItem(idx, 'down')}
                     aria-label="Move Down"
                     className="w-7 h-7 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] disabled:opacity-20 cursor-pointer"

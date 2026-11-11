@@ -25,6 +25,20 @@ function sanitizeSettings(raw: unknown): AppSettings {
     return DEFAULT_SETTINGS;
   }
   const s = raw as Partial<AppSettings>;
+  const savedNavigationItems = Array.isArray(s.navigation?.items)
+    ? s.navigation.items
+    : DEFAULT_SETTINGS.navigation.items;
+  const navigationItems = [
+    ...savedNavigationItems.map((item) =>
+      item.id === 'profile' ? { ...item, visible: true } : item
+    ),
+    ...(!savedNavigationItems.some((item) => item.id === 'documents')
+      ? [{ id: 'documents' as const, labelBn: 'ডকুমেন্ট', labelEn: 'Documents', visible: true, order: savedNavigationItems.length + 1 }]
+      : []),
+    ...(!savedNavigationItems.some((item) => item.id === 'profile')
+      ? [{ id: 'profile' as const, labelBn: 'প্রোফাইল', labelEn: 'Profile', visible: true, order: savedNavigationItems.length + 2 }]
+      : []),
+  ];
 
   return {
     languageRegion: {
@@ -49,11 +63,13 @@ function sanitizeSettings(raw: unknown): AppSettings {
       quickActions: Array.isArray(s.dashboard?.quickActions)
         ? s.dashboard!.quickActions
         : DEFAULT_SETTINGS.dashboard.quickActions,
+      quickExpenseEnabled:
+        typeof s.dashboard?.quickExpenseEnabled === 'boolean'
+          ? s.dashboard.quickExpenseEnabled
+          : DEFAULT_SETTINGS.dashboard.quickExpenseEnabled,
     },
     navigation: {
-      items: Array.isArray(s.navigation?.items)
-        ? s.navigation!.items
-        : DEFAULT_SETTINGS.navigation.items,
+      items: navigationItems,
     },
     modules: {
       items: Array.isArray(s.modules?.items)

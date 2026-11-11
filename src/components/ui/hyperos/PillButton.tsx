@@ -43,7 +43,7 @@ export const PillButton: React.FC<PillButtonProps> = ({
       ? 'bg-white dark:bg-[#323236] text-[var(--hyper-text-primary)] font-bold shadow-sm shadow-black/10 border border-black/5 dark:border-white/10'
       : 'bg-transparent text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] font-medium',
     danger:
-      'bg-gradient-to-r from-[#E94B4B] to-[#D43838] text-white shadow-md shadow-[#E94B4B]/25 border border-white/20 hover:brightness-105 active:scale-[0.98]',
+      'bg-transparent text-[#E94B4B] border border-[#E94B4B]/60 hover:bg-[#E94B4B]/10 active:scale-[0.98]',
     ghost:
       'bg-transparent text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5',
   }[variant];

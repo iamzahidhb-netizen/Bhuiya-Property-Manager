@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FileText,
   Image as ImageIcon,
@@ -16,12 +16,12 @@ import {
   fetchFileBlob,
   revokeFileBlobUrl
 } from '../../services/storageService';
-import { DriveFileUpload } from './DriveFileUpload';
-import { DriveFilePreviewModal } from './DriveFilePreviewModal';
+import { StorageFileUpload } from './StorageFileUpload';
+import { StorageFilePreviewModal } from './StorageFilePreviewModal';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { PillButton } from '../ui/hyperos';
 
-export interface DriveDocumentListProps {
+export interface StorageDocumentListProps {
   tenantId?: string;
   propertyId?: string;
   category?: StorageCategory;
@@ -30,7 +30,7 @@ export interface DriveDocumentListProps {
   className?: string;
 }
 
-export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
+export const StorageDocumentList: React.FC<StorageDocumentListProps> = ({
   tenantId,
   propertyId,
   category,
@@ -43,28 +43,36 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
 
   const [files, setFiles] = useState<StorageFile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<StorageFile | null>(null);
 
-  const loadFiles = async () => {
-    setLoading(true);
+  const loadFiles = useCallback(async () => {
     try {
       const data = await listStorageFiles({
         category,
         tenantId,
         propertyId
       });
-      setFiles(data);
+      setFiles(data.sort((left, right) =>
+        new Date(right.uploadedAt).getTime() - new Date(left.uploadedAt).getTime()
+      ));
     } catch (err) {
-      console.warn('Error loading files:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Error loading stored documents:', err);
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, tenantId, propertyId]);
 
   useEffect(() => {
-    loadFiles();
-  }, [tenantId, propertyId, category]);
+    const load = async () => {
+      await Promise.resolve();
+      await loadFiles();
+    };
+    void load();
+  }, [loadFiles]);
 
   const handleDownload = async (file: StorageFile, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -95,7 +103,7 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-[var(--hyper-text-primary)] flex items-center gap-2">
           <Cloud className="w-4 h-4 text-[#1685E8]" />
-          <span>{title || (isBn ? 'Google Drive ক্লাউড ডকুমেন্টস' : 'Google Drive Cloud Documents')}</span>
+          <span>{title || (isBn ? 'ক্লাউড ডকুমেন্টস' : 'Cloud Documents')}</span>
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-[#1685E8]">
             {files.length}
           </span>
@@ -104,7 +112,11 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={loadFiles}
+            onClick={() => {
+              setLoading(true);
+              setLoadError(null);
+              void loadFiles();
+            }}
             disabled={loading}
             className="p-1.5 rounded-lg text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer disabled:opacity-50"
             title={isBn ? 'রিফ্রেশ' : 'Refresh'}
@@ -125,12 +137,12 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
       {/* Upload Drawer */}
       {showUpload && (
         <div className="p-3.5 rounded-2xl bg-[var(--hyper-surface-elevated)] border border-[var(--hyper-border-subtle)] animate-in fade-in duration-150">
-          <DriveFileUpload
+          <StorageFileUpload
             category={defaultUploadCategory}
             tenantId={tenantId}
             propertyId={propertyId}
             label={isBn ? 'ডকুমেন্ট আপলোড করুন' : 'Upload Document'}
-            description={isBn ? 'ফাইল নির্বাচন করে ড্রাইভে সুরক্ষিতভাবে সংরক্ষণ করুন' : 'Private vault'}
+            description={isBn ? 'ফাইল ব্যক্তিগত Cloudflare R2-তে সংরক্ষণ করুন' : 'Private Cloudflare R2 storage'}
             onUploadSuccess={(newFile) => {
               setFiles((prev) => [newFile, ...prev]);
               setShowUpload(false);
@@ -145,6 +157,20 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           <span>{isBn ? 'লোড হচ্ছে...' : 'Loading files...'}</span>
         </div>
+      ) : loadError ? (
+        <div className="space-y-2 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-5 text-center">
+          <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+            {isBn ? `ডকুমেন্ট লোড করা যায়নি: ${loadError}` : `Documents could not be loaded: ${loadError}`}
+          </p>
+          <PillButton size="sm" variant="secondary" onClick={() => {
+            setLoading(true);
+            setLoadError(null);
+            void loadFiles();
+          }}>
+            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            {isBn ? 'আবার চেষ্টা করুন' : 'Try again'}
+          </PillButton>
+        </div>
       ) : files.length === 0 ? (
         <div className="py-6 text-center rounded-2xl border border-dashed border-[var(--hyper-border-subtle)] p-4 space-y-1">
           <FolderOpen className="w-6 h-6 text-[var(--hyper-text-tertiary)] mx-auto opacity-60" />
@@ -152,7 +178,7 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
             {isBn ? 'কোনো ডকুমেন্ট সংরক্ষিত নেই' : 'No documents attached'}
           </p>
           <p className="text-[10px] text-[var(--hyper-text-tertiary)]">
-            {isBn ? 'এনআইডি বা চুক্তিপত্র সরাসরি গুগল ড্রাইভে আপলোড করতে পারেন' : 'Upload NID or lease agreements to Google Drive'}
+            {isBn ? 'নতুন ফাইল ব্যক্তিগত Cloudflare R2-তে সংরক্ষিত হবে' : 'New files are stored privately in Cloudflare R2'}
           </p>
         </div>
       ) : (
@@ -180,7 +206,15 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
                       {file.uploadedAt && (
                         <>
                           <span>•</span>
-                          <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>
+                          <span>
+                            {new Date(file.uploadedAt).toLocaleString(isBn ? 'bn-BD' : 'en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
                         </>
                       )}
                     </p>
@@ -212,7 +246,7 @@ export const DriveDocumentList: React.FC<DriveDocumentListProps> = ({
       )}
 
       {/* Preview Modal */}
-      <DriveFilePreviewModal
+      <StorageFilePreviewModal
         file={selectedFile}
         isOpen={Boolean(selectedFile)}
         onClose={() => setSelectedFile(null)}

@@ -31,7 +31,7 @@ export const HyperCard: React.FC<HyperCardProps> = ({
     subtle:
       'bg-[var(--hyper-bg-card-subtle)] border border-[var(--hyper-border-subtle)]',
     floating:
-      'bg-[var(--hyper-bg-glass-strong)] border border-[var(--hyper-border-glass)] shadow-[var(--hyper-shadow-nav)] [box-shadow:var(--hyper-inner-highlight),var(--hyper-shadow-nav)]',
+      'bg-[var(--hyper-bg-glass-strong)] border border-[var(--hyper-border-glass)] shadow-[var(--hyper-shadow-card)] [box-shadow:var(--hyper-inner-highlight),var(--hyper-shadow-card)]',
     flat:
       'bg-[var(--hyper-bg-card)] border border-[var(--hyper-border-subtle)]',
   }[variant];

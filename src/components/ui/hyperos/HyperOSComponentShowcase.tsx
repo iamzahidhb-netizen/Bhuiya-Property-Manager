@@ -22,7 +22,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 export const HyperOSComponentShowcase: React.FC = () => {
   const { resolvedTheme, setTheme } = useTheme();
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'profile'>('home');
+  const [activeSection, setActiveSection] = useState<'home' | 'accounts' | 'documents' | 'profile'>('home');
   const [testOverflow, setTestOverflow] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategoryId | null>(null);
 

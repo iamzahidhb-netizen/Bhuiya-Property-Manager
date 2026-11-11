@@ -1,15 +1,15 @@
 import React, { useMemo } from 'react';
-import { House, BookOpen, ReceiptText, Wallet, UserRound } from 'lucide-react';
+import { House, BookOpen, Files, ReceiptText, Wallet, UserRound } from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { type NavItemConfig, DEFAULT_ANIMATION_SETTINGS } from '../../../types/settings';
 
-export type MainNavSection = 'home' | 'accounts' | 'profile' | 'settings' | 'rent-deposit' | 'add-expense';
+export type MainNavSection = 'home' | 'accounts' | 'documents' | 'profile' | 'settings' | 'rent-deposit' | 'add-expense';
 
 export interface FloatingPillNavProps {
   activeSection: MainNavSection;
   drillDownView: string | null;
-  onSelectSection: (section: 'home' | 'accounts' | 'profile') => void;
+  onSelectSection: (section: 'home' | 'accounts' | 'documents' | 'profile') => void;
   onOpenNewExpense: () => void;
   onOpenRentPayment: () => void;
   canCreateExpense?: boolean;
@@ -43,6 +43,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
   const isBn = currentLanguage === 'bn';
   const isHomeActive = activeSection === 'home' && !drillDownView;
   const isAccountsActive = activeSection === 'accounts' && !drillDownView;
+  const isDocumentsActive = activeSection === 'documents' && !drillDownView;
   const isProfileActive = activeSection === 'profile' && !drillDownView;
   const isNewExpenseActive = activeSection === 'add-expense' && !drillDownView;
   const isRentDepositActive = activeSection === 'rent-deposit' && !drillDownView;
@@ -51,9 +52,10 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
   const defaultItems: NavItemConfig[] = [
     { id: 'home', labelBn: 'হোম', labelEn: 'Home', visible: true, order: 1 },
     { id: 'accounts', labelBn: 'হিসাব', labelEn: 'Accounts', visible: true, order: 2 },
-    { id: 'newExpense', labelBn: 'নতুন খরচ', labelEn: 'New Expense', visible: true, order: 3, isActionShortcut: true },
-    { id: 'rentDeposit', labelBn: 'ভাড়া জমা', labelEn: 'Collect Rent', visible: true, order: 4, isActionShortcut: true },
-    { id: 'profile', labelBn: 'প্রোফাইল', labelEn: 'Profile', visible: true, order: 5 },
+    { id: 'documents', labelBn: 'ডকুমেন্ট', labelEn: 'Documents', visible: true, order: 3 },
+    { id: 'newExpense', labelBn: 'নতুন খরচ', labelEn: 'New Expense', visible: true, order: 4, isActionShortcut: true },
+    { id: 'rentDeposit', labelBn: 'ভাড়া জমা', labelEn: 'Collect Rent', visible: true, order: 5, isActionShortcut: true },
+    { id: 'profile', labelBn: 'প্রোফাইল', labelEn: 'Profile', visible: true, order: 6 },
   ];
 
   const itemsToRender = (configuredNavItems || defaultItems)
@@ -79,6 +81,12 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
         activeColor: '#1685E8',
       };
     }
+    if (isDocumentsActive) {
+      return {
+        activeIndex: finalItems.findIndex((i) => i.id === 'documents'),
+        activeColor: '#1685E8',
+      };
+    }
     if (isNewExpenseActive) {
       return {
         activeIndex: finalItems.findIndex((i) => i.id === 'newExpense'),
@@ -98,7 +106,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
       };
     }
     return { activeIndex: -1, activeColor: '#22B84A' };
-  }, [finalItems, isHomeActive, isAccountsActive, isNewExpenseActive, isRentDepositActive, isProfileActive]);
+  }, [finalItems, isHomeActive, isAccountsActive, isDocumentsActive, isNewExpenseActive, isRentDepositActive, isProfileActive]);
 
   const speedClass = useMemo(() => {
     switch (animSpeed) {
@@ -164,12 +172,37 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('accounts')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isAccountsActive,
-              'bg-[#1685E8] shadow-[#1685E8]/30'
+              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
             )}`}
           >
             <BookOpen
               className="w-5 h-5 shrink-0 group-active:scale-90"
               strokeWidth={isAccountsActive ? 2.4 : 2}
+              aria-hidden="true"
+            />
+            <span className="text-[10px] sm:text-[11px] leading-tight tracking-tight mt-0.5 truncate max-w-full font-medium">
+              {isBn ? item.labelBn : item.labelEn}
+            </span>
+          </button>
+        );
+
+      case 'documents':
+        return (
+          <button
+            key="documents"
+            type="button"
+            data-nav-item="documents"
+            aria-label={isBn ? 'ডকুমেন্ট' : 'Documents'}
+            aria-current={isDocumentsActive ? 'page' : undefined}
+            onClick={() => onSelectSection('documents')}
+            className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
+              isDocumentsActive,
+              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
+            )}`}
+          >
+            <Files
+              className="w-5 h-5 shrink-0 group-active:scale-90"
+              strokeWidth={isDocumentsActive ? 2.4 : 2}
               aria-hidden="true"
             />
             <span className="text-[10px] sm:text-[11px] leading-tight tracking-tight mt-0.5 truncate max-w-full font-medium">
@@ -191,7 +224,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={onOpenNewExpense}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed ${getItemClass(
               isNewExpenseActive,
-              'bg-[#F28A24] shadow-[#F28A24]/30'
+              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
             )}`}
           >
             <div className="relative flex items-center justify-center">
@@ -202,7 +235,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
               />
               {!isNewExpenseActive && (
                 <span
-                  className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#F28A24] rounded-full border border-white dark:border-[#1c1c1e]"
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--hyper-green)] rounded-full border border-white dark:border-[#1c1c1e]"
                   aria-hidden="true"
                 />
               )}
@@ -259,7 +292,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('profile')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isProfileActive,
-              'bg-[#7655E8] shadow-[#7655E8]/30'
+              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
             )}`}
           >
             <UserRound

@@ -1,8 +1,10 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSelector } from './common/LanguageSelector';
-import { ShieldAlert, LogIn, RotateCw } from 'lucide-react';
+import { ShieldAlert, LogOut, RotateCw } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import { UserUidDisplay } from './ui/hyperos/UserUidDisplay';
+import { StatusBadge } from './ui/hyperos/StatusBadge';
 
 interface AccessRestrictedScreenProps {
   user: User;
@@ -79,17 +81,17 @@ export default function AccessRestrictedScreen({
         <div className="bg-slate-50 rounded-2xl p-3.5 text-left space-y-2 border border-slate-200/70 text-xs font-mono">
           <div className="flex justify-between items-center text-slate-500">
             <span>Email:</span>
-            <span className="font-semibold text-slate-800">{user.email || 'N/A'}</span>
+            <span className="font-semibold text-slate-800">{user.email?.split('@')[0] || 'N/A'}</span>
           </div>
           <div className="flex justify-between items-center text-slate-500">
             <span>UID:</span>
-            <span className="truncate max-w-[210px] text-slate-700">{user.uid}</span>
+            <UserUidDisplay uid={user.uid} className="max-w-[210px] text-slate-700" />
           </div>
           <div className="flex justify-between items-center text-slate-500 pt-1 border-t border-slate-200/60 font-sans">
             <span>{t('common.status')}:</span>
-            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
+            <StatusBadge tone="warning">
               {t('accessRestricted.nonMemberStatus')}
-            </span>
+            </StatusBadge>
           </div>
           {displayError && (
             <div className="pt-1.5 text-[11px] text-amber-700 border-t border-slate-200">
@@ -105,7 +107,7 @@ export default function AccessRestrictedScreen({
             onClick={handleSignOut}
             className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <LogIn className="w-4 h-4 text-white" />
+            <LogOut className="w-4 h-4 text-white" />
             <span>{t('accessRestricted.switchAccount')}</span>
           </button>
           <button

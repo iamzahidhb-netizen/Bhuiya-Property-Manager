@@ -1,13 +1,13 @@
 /**
- * Google Drive Cloud Storage Service
- * 
- * Provides end-to-end integration with the backend Google Drive storage API.
- * Never exposes credentials, refresh tokens, or public sharing links.
- * All preview and download blobs are fetched with authorization headers.
+ * Private Cloudflare R2 storage service.
+ * Never exposes storage credentials or public sharing links.
  */
 
 import { auth } from '../lib/firebase.ts';
 import { getActiveWorkspaceId, resolveApiBase } from '../lib/apiClient.ts';
+import { STORES, saveItem, type OfflineAttachment } from '../lib/offlineDb';
+import { syncEngine } from '../lib/syncEngine';
+import { StorageNetworkError, uploadFileToR2 } from './storageUploadApi';
 
 export type StorageCategory =
   | 'nid'
@@ -27,8 +27,6 @@ export type StorageCategory =
 
 export interface StorageFile {
   id: string;
-  driveFileId: string;
-  driveFolderId?: string;
   fileName: string;
   originalFileName: string;
   mimeType: string;
@@ -39,20 +37,18 @@ export interface StorageFile {
   uploadedBy: string;
   uploadedAt: string;
   updatedAt?: string;
-  status: 'active' | 'deleted';
+  status: 'active' | 'deleted' | 'pending';
+  storageProvider: 'cloudflare-r2';
+  objectKey?: string;
+  fileHash?: string;
+  uploadStatus?: string;
+  isOffline?: boolean;
 }
 
-export interface DriveStatus {
-  connected: boolean;
-  connectedEmail?: string;
-  connectedAt?: string;
-  lastCheckedAt?: string;
-  status: 'connected' | 'disconnected' | 'revoked' | 'unconfigured';
-  rootFolderId?: string;
-  folderCount?: number;
-  hasConfig?: boolean;
-  clientId?: string;
-}
+export type R2StorageStatus =
+  | { state: 'available' }
+  | { state: 'not-configured'; message: string }
+  | { state: 'unavailable'; message: string };
 
 export interface UploadFileOptions {
   file: File;
@@ -60,6 +56,19 @@ export interface UploadFileOptions {
   tenantId?: string;
   propertyId?: string;
   onProgress?: (percent: number) => void;
+}
+
+function getUploadMimeType(file: File): string {
+  if (file.type) return file.type.toLowerCase();
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  const inferredTypes: Record<string, string> = {
+    pdf: 'application/pdf',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp'
+  };
+  return extension ? inferredTypes[extension] || 'application/octet-stream' : 'application/octet-stream';
 }
 
 /**
@@ -81,141 +90,27 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-/**
- * Checks current Google Drive connection status.
- */
-export async function getDriveStatus(): Promise<DriveStatus> {
+export async function getR2StorageStatus(): Promise<R2StorageStatus> {
   const base = resolveApiBase();
   const headers = await getAuthHeaders();
-
-  const res = await fetch(`${base}/api/storage/drive/status`, {
-    method: 'GET',
-    headers
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status} checking drive status`);
+  const res = await fetch(`${base}/api/storage/health`, { method: 'GET', headers });
+  let data: { error?: { code?: string; message?: string } };
+  try {
+    data = await res.json() as typeof data;
+  } catch {
+    throw new Error(`Storage health check returned an invalid response (HTTP ${res.status}).`);
   }
 
-  return await res.json();
+  if (res.ok) return { state: 'available' };
+  const message = data.error?.message || `HTTP ${res.status} checking R2 availability`;
+  if (data.error?.code === 'R2_NOT_CONFIGURED') {
+    return { state: 'not-configured', message };
+  }
+  return { state: 'unavailable', message };
 }
 
 /**
- * Initiates the Google OAuth 2.0 Web Server Authorization Code flow.
- * Returns the Google consent URL or redirects directly.
- */
-/**
- * Configures Google Cloud OAuth Client ID & Secret.
- */
-export async function configureDriveCredentials(params: {
-  clientId: string;
-  clientSecret: string;
-}): Promise<{ success: boolean; message: string }> {
-  const base = resolveApiBase();
-  const headers = await getAuthHeaders();
-  headers['Content-Type'] = 'application/json';
-
-  const res = await fetch(`${base}/api/storage/drive/configure`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params)
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `HTTP ${res.status} configuring Drive credentials`);
-  }
-
-  return data;
-}
-
-export async function connectDrive(): Promise<string> {
-  const base = resolveApiBase();
-  const headers = await getAuthHeaders();
-  headers['Content-Type'] = 'application/json';
-
-  const res = await fetch(`${base}/api/storage/drive/connect`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({})
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `HTTP ${res.status} initiating OAuth connection`);
-  }
-
-  const authUrl = data.url || data.authUrl;
-  if (!authUrl) {
-    throw new Error('সার্ভার থেকে গুগল অনুমোদন লিংক পাওয়া যায়নি।');
-  }
-
-  return authUrl;
-}
-
-/**
- * Disconnects Google Drive from the application.
- */
-export async function disconnectDrive(): Promise<{ success: boolean }> {
-  const base = resolveApiBase();
-  const headers = await getAuthHeaders();
-  headers['Content-Type'] = 'application/json';
-
-  const res = await fetch(`${base}/api/storage/drive/disconnect`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({})
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `HTTP ${res.status} disconnecting Drive`);
-  }
-
-  return data;
-}
-
-/**
- * Tests Google Drive token validity and folder structure access.
- */
-export async function testDriveConnection(): Promise<{ success: boolean; email?: string }> {
-  const base = resolveApiBase();
-  const headers = await getAuthHeaders();
-  headers['Content-Type'] = 'application/json';
-
-  const res = await fetch(`${base}/api/storage/drive/test`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({})
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `HTTP ${res.status} testing Drive connection`);
-  }
-
-  return data;
-}
-
-/**
- * Helper to convert a File to base64 string.
- */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Uploads a document or photo to Google Drive with Firestore metadata recording.
+ * Uploads directly to private R2 through a short-lived, file-scoped presigned URL.
  */
 export async function uploadStorageFile(options: UploadFileOptions): Promise<StorageFile> {
   const { file, category, tenantId, propertyId, onProgress } = options;
@@ -226,45 +121,89 @@ export async function uploadStorageFile(options: UploadFileOptions): Promise<Sto
 
   // File size validation (25MB limit)
   const MAX_SIZE = 25 * 1024 * 1024;
+  if (file.size < 1) {
+    throw new Error('Empty files cannot be uploaded.');
+  }
   if (file.size > MAX_SIZE) {
     throw new Error('ফাইলের সাইজ ২৫ মেগাবাইটের (25MB) বেশি হতে পারবে না।');
   }
+  const mimeType = getUploadMimeType(file);
+  if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    throw new Error('Unsupported file type. Use PDF, JPEG, PNG, or WebP.');
+  }
 
-  if (onProgress) onProgress(15);
+  const user = auth.currentUser;
+  if (!user) throw new Error('Authentication is required to upload files.');
+  const uploadId = `file_${crypto.randomUUID()}`;
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine;
 
-  const base64Data = await fileToBase64(file);
-  if (onProgress) onProgress(40);
+  if (isOnline) {
+    try {
+      return await uploadFileToR2(file, {
+        fileId: uploadId,
+        fileName: file.name,
+        mimeType,
+        fileSize: file.size,
+        category,
+        workspaceId: getActiveWorkspaceId() || 'workspace_bhuiya_family',
+        tenantId,
+        propertyId
+      }, onProgress).then((storedFile) => ({
+        ...storedFile,
+        category,
+        tenantId: storedFile.tenantId || undefined,
+        propertyId: storedFile.propertyId || undefined
+      }));
+    } catch (uploadError) {
+      if (!(uploadError instanceof StorageNetworkError)) throw uploadError;
+    }
+  }
 
-  const base = resolveApiBase();
-  const headers = await getAuthHeaders();
-  headers['Content-Type'] = 'application/json';
-
-  const payload = {
+  const offlineId = `offline_${crypto.randomUUID()}`;
+  const offlineAttachment: OfflineAttachment = {
+    id: offlineId,
+    uploadId,
     fileName: file.name,
-    mimeType: file.type || 'application/octet-stream',
+    mimeType,
     fileSize: file.size,
     category,
-    tenantId: tenantId || null,
-    propertyId: propertyId || null,
-    fileData: base64Data
+    workspaceId: getActiveWorkspaceId() || 'workspace_bhuiya_family',
+    uploadedBy: user.uid,
+    tenantId: tenantId || undefined,
+    propertyId: propertyId || undefined,
+    blob: file,
+    status: 'pending',
+    createdAt: Date.now(),
   };
 
-  if (onProgress) onProgress(70);
-
-  const res = await fetch(`${base}/api/storage/files/upload`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
+  await saveItem(STORES.OFFLINE_ATTACHMENTS, offlineAttachment);
+  await syncEngine.enqueueAction({
+    actionName: 'uploadStorageAttachment',
+    payload: { uploadId },
+    category: 'file',
+    workspaceId: getActiveWorkspaceId() || 'workspace_bhuiya_family',
+    callerUid: user.uid,
+    attachmentIds: [offlineId]
   });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message || `Upload failed: HTTP ${res.status}`);
-  }
 
   if (onProgress) onProgress(100);
 
-  return data.file;
+  return {
+    id: uploadId,
+    fileName: file.name,
+    originalFileName: file.name,
+    mimeType,
+    fileSize: file.size,
+    category,
+    tenantId: tenantId || undefined,
+    propertyId: propertyId || undefined,
+    uploadedBy: user.uid,
+    uploadedAt: new Date().toISOString(),
+    status: 'pending',
+    storageProvider: 'cloudflare-r2',
+    uploadStatus: 'pending',
+    isOffline: true,
+  };
 }
 
 /**
@@ -320,7 +259,7 @@ export async function getStorageFile(fileId: string): Promise<StorageFile> {
 }
 
 /**
- * Deletes a file from Google Drive and updates Firestore status to 'deleted'.
+ * Deletes a private R2 object and updates its Firestore status to 'deleted'.
  */
 export async function deleteStorageFile(fileId: string): Promise<{ success: boolean }> {
   const base = resolveApiBase();
@@ -363,7 +302,26 @@ export async function fetchFileBlob(fileId: string, action: 'preview' | 'downloa
     throw new Error(err?.error?.message || `HTTP ${res.status} streaming file`);
   }
 
-  const blob = await res.blob();
+  let blob: Blob;
+  if (res.headers.get('Content-Type')?.includes('application/json')) {
+    const data = await res.json() as { url?: string };
+    if (!data.url) throw new Error('Storage API did not return a signed download URL.');
+    let downloadResponse: Response;
+    try {
+      downloadResponse = await fetch(data.url);
+    } catch (downloadError) {
+      throw new Error(
+        downloadError instanceof Error ? downloadError.message : 'Unable to reach private file storage.',
+        { cause: downloadError }
+      );
+    }
+    if (!downloadResponse.ok) {
+      throw new Error(`Private file download failed: HTTP ${downloadResponse.status}`);
+    }
+    blob = await downloadResponse.blob();
+  } else {
+    blob = await res.blob();
+  }
   const mimeType = res.headers.get('Content-Type') || blob.type || 'application/octet-stream';
   const objectUrl = URL.createObjectURL(blob);
 

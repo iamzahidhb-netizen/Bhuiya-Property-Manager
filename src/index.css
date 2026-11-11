@@ -1,7 +1,73 @@
 @import "tailwindcss";
+@import "./styles/design-tokens.css";
 @import "./styles/hyperos-tokens.css";
 @import "./styles/liquid-glass.css";
 @import "./styles/hyperos-transitions.css";
+
+@theme {
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 22px;
+  --text-3xl: 22px;
+  --text-4xl: 22px;
+  --text-5xl: 22px;
+  --text-6xl: 22px;
+  --text-7xl: 22px;
+  --text-8xl: 22px;
+  --text-9xl: 22px;
+}
+
+/* Base typography setup for Noto Sans Bengali & Latin system fonts */
+html {
+  font-family: var(--font-bangla);
+  line-height: var(--lh-bangla);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: inherit;
+  line-height: inherit;
+}
+
+@layer utilities {
+  .text-headline-small {
+    font-size: 22px;
+  }
+
+  .text-title-medium {
+    font-size: 18px;
+  }
+
+  .text-body-large {
+    font-size: 16px;
+  }
+
+  .text-body-medium {
+    font-size: 14px;
+  }
+
+  .text-body-small {
+    font-size: 12px;
+  }
+
+  [class~="text-[8px]"],
+  [class~="text-[9px]"],
+  [class~="text-[9.5px]"],
+  [class~="text-[10px]"],
+  [class~="text-[10.5px]"],
+  [class~="text-[11px]"],
+  [class~="text-[13px]"] {
+    font-size: 12px;
+  }
+
+  [class~="text-[28px]"] {
+    font-size: 22px;
+  }
+}
 
 @media print {
   body {

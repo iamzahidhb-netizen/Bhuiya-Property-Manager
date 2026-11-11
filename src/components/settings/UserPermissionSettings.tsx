@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
@@ -82,9 +84,7 @@ export const UserPermissionSettings: React.FC<UserPermissionSettingsProps> = ({
             {isBn ? 'ভূমিকা ভিত্তিক অনুমতি কাঠামো ও সদস্য ব্যবস্থাপনা' : 'Role-based access control (RBAC) & member roles'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Member Management Action Card */}
@@ -127,16 +127,16 @@ export const UserPermissionSettings: React.FC<UserPermissionSettingsProps> = ({
             {isBn ? 'আপনার বর্তমান ভূমিকা:' : 'Your Active Role:'}
           </span>
         </div>
-        <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#22B84A]/10 text-[#22B84A] border border-[#22B84A]/20">
+        <StatusBadge tone="success">
           {isMasterAdmin ? 'Master Admin' : role || 'Viewer'}
-        </span>
+        </StatusBadge>
       </div>
 
       {/* Roles Breakdown */}
       <HyperCard variant="default" className="p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-3 pb-3 border-b border-[var(--hyper-border-subtle)]">
-          <div className="w-9 h-9 rounded-[14px] bg-[var(--hyper-purple-bg)] flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5 text-[#7655E8]" />
+          <div className="w-9 h-9 rounded-[14px] bg-[var(--hyper-green-bg)] flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5 text-[var(--hyper-green)]" />
           </div>
           <div>
             <h4 className="text-sm font-bold text-[var(--hyper-text-primary)]">

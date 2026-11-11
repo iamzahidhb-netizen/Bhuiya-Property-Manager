@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_SETTINGS } from '../../types/settings';
@@ -61,9 +62,7 @@ export const NotificationSettings: React.FC<{ onBack: () => void }> = ({ onBack 
             {isBn ? 'বকেয়া তাগাদা, খরচ সতর্কতা এবং সিস্টেম বার্তা' : 'Due reminders, alerts & system notices'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Preferences List */}

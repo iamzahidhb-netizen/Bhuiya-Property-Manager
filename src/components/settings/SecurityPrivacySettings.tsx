@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
@@ -60,9 +61,7 @@ export const SecurityPrivacySettings: React.FC<{ onBack: () => void }> = ({ onBa
             {isBn ? 'সেশন মেয়াদ, ক্রিয়াকলাপের নিশ্চয়তা এবং ডেটা সুরক্ষা' : 'Session timeout, safety gates & workspace isolation'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* Financial Write Lock Compliance Card */}

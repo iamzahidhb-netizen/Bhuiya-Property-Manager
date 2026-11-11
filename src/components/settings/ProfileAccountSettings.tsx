@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
+import { UserUidDisplay } from '../ui/hyperos/UserUidDisplay';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -82,9 +85,7 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
             {isBn ? 'ব্যবহারকারীর তথ্য, ওয়ার্কস্পেস পরিচয় এবং লগআউট' : 'User credentials, workspace identity and session'}
           </p>
         </div>
-        <PillButton variant="ghost" size="sm" onClick={onBack}>
-          ← {isBn ? 'ফিরে যান' : 'Back'}
-        </PillButton>
+        <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
       </div>
 
       {/* User Hero Card */}
@@ -123,28 +124,20 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
               {displayName}
             </h4>
             <p className="text-xs text-[var(--hyper-text-secondary)] truncate">
-              {user?.email || 'admin@bhuiyan.com'}
+              {user?.email?.split('@')[0] || 'admin'}
             </p>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                  isMasterAdmin
-                    ? 'bg-purple-500/10 text-purple-600 border-purple-500/20'
-                    : role === 'manager'
-                    ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                    : 'bg-black/5 dark:bg-white/10 text-[var(--hyper-text-secondary)] border-transparent'
-                }`}
-              >
+              <StatusBadge tone={role === 'viewer' && !isMasterAdmin ? 'neutral' : 'success'}>
                 {isMasterAdmin
                   ? 'Master Admin'
                   : role === 'manager'
                   ? 'Manager'
                   : 'Viewer'}
-              </span>
-              <span className="flex items-center gap-1 text-[10px] text-[#22B84A] font-semibold">
-                <CheckCircle2 className="w-3 h-3 text-[#22B84A]" />
-                <span>{isBn ? 'সক্রিয় সেশন' : 'Active'}</span>
-              </span>
+              </StatusBadge>
+              <StatusBadge tone="success">
+                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                {isBn ? 'সক্রিয় সেশন' : 'Active'}
+              </StatusBadge>
             </div>
           </div>
         </div>
@@ -182,11 +175,9 @@ export const ProfileAccountSettings: React.FC<{ onBack: () => void }> = ({ onBac
             </span>
           </div>
 
-          <div className="p-3 rounded-[16px] bg-black/5 dark:bg-white/5 flex items-center justify-between">
+          <div className="p-3 rounded-[16px] bg-black/5 dark:bg-white/5 flex items-center justify-between gap-3">
             <span className="text-[var(--hyper-text-secondary)] font-medium">User UID</span>
-            <span className="font-mono font-bold text-[var(--hyper-text-primary)] truncate max-w-[200px]">
-              {user?.uid || 'usr_master_admin_001'}
-            </span>
+            <UserUidDisplay uid={user?.uid || ''} className="font-bold text-[var(--hyper-text-primary)]" />
           </div>
 
           <div className="p-3 rounded-[16px] bg-black/5 dark:bg-white/5 flex items-center justify-between">

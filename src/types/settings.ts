@@ -5,7 +5,7 @@
 
 export type AppTheme = 'light' | 'dark' | 'system';
 export type AppLanguage = 'bn' | 'en';
-export type AccentColor = 'green' | 'blue' | 'orange' | 'purple';
+export type AccentColor = 'green';
 
 export interface DashboardSectionConfig {
   id: 'banner' | 'financialSummary' | 'quickActions' | 'propertySummary' | 'recentActivity';
@@ -34,7 +34,7 @@ export interface QuickActionConfig {
 }
 
 export interface NavItemConfig {
-  id: 'home' | 'accounts' | 'newExpense' | 'rentDeposit' | 'profile';
+  id: 'home' | 'accounts' | 'documents' | 'newExpense' | 'rentDeposit' | 'profile';
   labelBn: string;
   labelEn: string;
   visible: boolean;
@@ -98,6 +98,7 @@ export interface AppSettings {
     sections: DashboardSectionConfig[];
     financialCards: FinancialCardConfig[];
     quickActions: QuickActionConfig[];
+    quickExpenseEnabled: boolean;
   };
   navigation: {
     items: NavItemConfig[];
@@ -160,14 +161,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
       { id: 'addTenant', labelBn: 'ভাড়াটিয়া যোগ', labelEn: 'Add Tenant', visible: true, order: 3, color: 'blue' },
       { id: 'allAccounts', labelBn: 'সকল হিসাব', labelEn: 'All Accounts', visible: true, order: 4, color: 'purple' },
     ],
+    quickExpenseEnabled: true,
   },
   navigation: {
     items: [
       { id: 'home', labelBn: 'হোম', labelEn: 'Home', visible: true, order: 1 },
       { id: 'accounts', labelBn: 'হিসাব', labelEn: 'Accounts', visible: true, order: 2 },
-      { id: 'newExpense', labelBn: 'নতুন খরচ', labelEn: 'New Expense', visible: true, order: 3, isActionShortcut: true },
-      { id: 'rentDeposit', labelBn: 'ভাড়া জমা', labelEn: 'Collect Rent', visible: true, order: 4, isActionShortcut: true },
-      { id: 'profile', labelBn: 'প্রোফাইল', labelEn: 'Profile', visible: true, order: 5 },
+      { id: 'documents', labelBn: 'ডকুমেন্ট', labelEn: 'Documents', visible: true, order: 3 },
+      { id: 'newExpense', labelBn: 'নতুন খরচ', labelEn: 'New Expense', visible: true, order: 4, isActionShortcut: true },
+      { id: 'rentDeposit', labelBn: 'ভাড়া জমা', labelEn: 'Collect Rent', visible: true, order: 5, isActionShortcut: true },
+      { id: 'profile', labelBn: 'প্রোফাইল', labelEn: 'Profile', visible: true, order: 6 },
     ],
   },
   modules: {

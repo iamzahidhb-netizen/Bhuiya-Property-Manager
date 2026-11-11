@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import type {
@@ -114,6 +116,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
 
   // Live preview simulator states
   const [previewScreen, setPreviewScreen] = useState<'screenA' | 'screenB'>('screenA');
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const [previewDirection, setPreviewDirection] = useState<'forward' | 'backward'>('forward');
   const [previewNonce, setPreviewNonce] = useState<number>(0);
   const [cardReplayId, setCardReplayId] = useState<PageTransitionStyle | null>(null);
@@ -158,6 +161,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
   }
 
   function triggerLivePreview() {
+    setPreviewExpanded(true);
     const nextDir = previewScreen === 'screenA' ? 'forward' : 'backward';
     const nextScreen = previewScreen === 'screenA' ? 'screenB' : 'screenA';
     setPreviewDirection(nextDir);
@@ -185,9 +189,9 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
             <h3 className="text-lg font-bold text-[var(--hyper-text-primary)]">
               {isBn ? 'নেভিগেশন ও অ্যানিমেশন' : 'Navigation & Animation'}
             </h3>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#22B84A]/15 text-[#22B84A] dark:text-[#2dd35b] border border-[#22B84A]/30">
+            <StatusBadge tone="success">
               HyperOS Motion
-            </span>
+            </StatusBadge>
           </div>
           <p className="text-xs text-[var(--hyper-text-secondary)]">
             {isBn
@@ -196,9 +200,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
           </p>
         </div>
         {onBack && (
-          <PillButton variant="ghost" size="sm" onClick={onBack}>
-            ← {isBn ? 'ফিরে যান' : 'Back'}
-          </PillButton>
+          <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
         )}
       </div>
 
@@ -211,7 +213,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-[var(--hyper-border-subtle)]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[var(--hyper-green-bg)] text-[var(--hyper-green)] flex items-center justify-center shrink-0">
               <Eye className="w-4 h-4" />
             </div>
             <div>
@@ -229,6 +231,16 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setPreviewExpanded((expanded) => !expanded)}
+              aria-expanded={previewExpanded}
+              className="px-3.5 py-1.5 rounded-full border border-[var(--hyper-border-subtle)] bg-[var(--hyper-surface)] text-[var(--hyper-text-primary)] font-semibold text-xs transition-colors hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+            >
+              {previewExpanded
+                ? (isBn ? 'প্রিভিউ লুকান' : 'Hide Preview')
+                : (isBn ? 'প্রিভিউ দেখুন' : 'Show Preview')}
+            </button>
+            <button
+              type="button"
               onClick={triggerLivePreview}
               className="px-3.5 py-1.5 rounded-full bg-[#22B84A] hover:bg-[#1faa43] active:scale-95 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer select-none"
             >
@@ -239,6 +251,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
         </div>
 
         {/* Live Simulator Viewport */}
+        {previewExpanded && (
         <div className="pt-4 flex flex-col items-center">
           <div className="w-full max-w-[340px] rounded-[24px] border-2 border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] shadow-lg overflow-hidden flex flex-col [height:240px] relative">
             {/* Mock Status Bar */}
@@ -264,8 +277,8 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                     : `hyper-trans-${selectedStyle}-${previewDirection}`
                 }`}
                 style={{
-                  backgroundColor: previewScreen === 'screenA' ? '#22B84A10' : '#1685E810',
-                  border: `1px solid ${previewScreen === 'screenA' ? '#22B84A40' : '#1685E840'}`,
+                  backgroundColor: '#22B84A10',
+                  border: '1px solid #22B84A40',
                 }}
               >
                 <div>
@@ -273,7 +286,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                     <span
                       className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
                       style={{
-                        backgroundColor: previewScreen === 'screenA' ? '#22B84A' : '#1685E8',
+                        backgroundColor: '#22B84A',
                       }}
                     >
                       {previewScreen === 'screenA' ? (isBn ? 'হোম ড্যাশবোর্ড' : 'Home Dashboard') : (isBn ? 'হিসাব খাতা' : 'Accounts Khata')}
@@ -308,7 +321,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                   style={{
                     width: '30%',
                     left: previewScreen === 'screenA' ? '3%' : '35%',
-                    backgroundColor: previewScreen === 'screenA' ? '#22B84A' : '#1685E8',
+                    backgroundColor: '#22B84A',
                   }}
                 />
               )}
@@ -346,8 +359,8 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                     ? selectedNavbar === 'smooth-indicator'
                       ? 'text-white'
                       : selectedNavbar === 'scale'
-                      ? 'bg-[#1685E8] text-white scale-110 shadow-xs'
-                      : 'bg-[#1685E8] text-white -translate-y-1.5 shadow-md'
+                      ? 'bg-[#22B84A] text-white scale-110 shadow-xs'
+                      : 'bg-[#22B84A] text-white -translate-y-1.5 shadow-md'
                     : 'text-[var(--hyper-text-secondary)]'
                 }`}
               >
@@ -362,6 +375,7 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
             </div>
           </div>
         </div>
+        )}
       </HyperCard>
 
       {/* ===================================================================== */}
@@ -430,9 +444,9 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                           {isBn ? style.titleBn : style.titleEn}
                         </span>
                         {style.badge && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22B84A]/20 text-[#22B84A] dark:text-[#2dd35b]">
+                          <StatusBadge tone="success" className="px-2 py-1">
                             {style.badge}
-                          </span>
+                          </StatusBadge>
                         )}
                       </div>
                       <p className="text-[11px] text-[var(--hyper-text-secondary)] mt-0.5">
@@ -733,8 +747,8 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                       liveDockActive === 'home'
                         ? '#22B84A'
                         : liveDockActive === 'accounts'
-                        ? '#1685E8'
-                        : '#7655E8',
+                        ? '#22B84A'
+                        : '#22B84A',
                   }}
                   aria-hidden="true"
                 />
@@ -771,8 +785,8 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                     ? selectedNavbar === 'smooth-indicator'
                       ? 'hyper-nav-item text-white font-bold relative z-10'
                       : selectedNavbar === 'scale'
-                      ? 'hyper-nav-item bg-[#1685E8] text-white shadow-md font-bold hyper-nav-scale-active relative z-10'
-                      : 'hyper-nav-item bg-[#1685E8] text-white font-bold hyper-nav-slide-active relative z-10'
+                      ? 'hyper-nav-item bg-[#22B84A] text-white shadow-md font-bold hyper-nav-scale-active relative z-10'
+                      : 'hyper-nav-item bg-[#22B84A] text-white font-bold hyper-nav-slide-active relative z-10'
                     : 'hyper-nav-item hyper-nav-inactive text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 relative z-10'
                 }`}
               >
@@ -792,8 +806,8 @@ export const NavigationAnimationSettings: React.FC<NavigationAnimationSettingsPr
                     ? selectedNavbar === 'smooth-indicator'
                       ? 'hyper-nav-item text-white font-bold relative z-10'
                       : selectedNavbar === 'scale'
-                      ? 'hyper-nav-item bg-[#7655E8] text-white shadow-md font-bold hyper-nav-scale-active relative z-10'
-                      : 'hyper-nav-item bg-[#7655E8] text-white font-bold hyper-nav-slide-active relative z-10'
+                      ? 'hyper-nav-item bg-[#22B84A] text-white shadow-md font-bold hyper-nav-scale-active relative z-10'
+                      : 'hyper-nav-item bg-[#22B84A] text-white font-bold hyper-nav-slide-active relative z-10'
                     : 'hyper-nav-item hyper-nav-inactive text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 relative z-10'
                 }`}
               >

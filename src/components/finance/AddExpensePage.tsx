@@ -7,8 +7,9 @@ import { formatLocalizedCurrency } from '../../utils/banglaFormat';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAppNavigation } from '../../contexts/NavigationContext';
+import { SyncStatusBar } from '../ui/SyncStatusBar';
 import { FrostedGlassSelect, type FrostedGlassOption } from '../ui/hyperos';
-import { DriveFileUpload } from '../storage/DriveFileUpload';
+import { StorageFileUpload } from '../storage/StorageFileUpload';
 import {
   ReceiptText,
   ArrowLeft,
@@ -254,13 +255,6 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleBackRequest}
-            className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-[var(--hyper-text-primary)] transition-colors cursor-pointer select-none"
-          >
-            {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
-          </button>
         </div>
       </header>
 
@@ -268,6 +262,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
       {/* Main Content Area: Responsive Form Container (Centered Max-W-XL)     */}
       {/* ===================================================================== */}
       <main className="max-w-xl w-full mx-auto px-3 sm:px-5 py-3 sm:py-4 flex-1">
+        <SyncStatusBar className="mb-3" />
         {successInfo ? (
           /* ================================================================= */
           /* Full-Page Success & Summary Card View                             */
@@ -338,9 +333,10 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
               <button
                 type="button"
                 onClick={onBack || goBack}
-                className="w-full sm:w-1/2 py-2.5 rounded-xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-xs sm:text-sm shadow-sm transition cursor-pointer"
+                aria-label={isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+                className="h-12 w-12 rounded-full border border-[var(--hyper-green)]/40 bg-transparent text-[var(--hyper-green)] hover:bg-[var(--hyper-green-bg)] transition cursor-pointer flex items-center justify-center"
               >
-                {isBn ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to Dashboard'}
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -372,11 +368,6 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     disabled={loading}
-                    placeholder={
-                      isBn
-                        ? 'যেমন: পানির মোটর মেরামত, ঝাড়ুদার বিল, কারেন্ট বিল'
-                        : 'e.g. Water pump repair, cleaning fee, electric bill'
-                    }
                     className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                   />
                 </div>
@@ -404,7 +395,6 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                         setAmount(e.target.value ? Number(e.target.value) : '')
                       }
                       disabled={loading}
-                      placeholder="1500"
                       className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] pl-7 pr-2.5 text-sm sm:text-base font-bold text-[var(--hyper-text-primary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                     />
                   </div>
@@ -504,23 +494,18 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={loading}
-                    placeholder={
-                      isBn
-                        ? 'খরচের বিস্তারিত বিবরণ বা দোকানদারের মেমো নম্বর'
-                        : 'Expense details or vendor invoice memo number'
-                    }
                     className="w-full h-10 rounded-xl border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-base)] px-3 text-xs sm:text-sm font-medium text-[var(--hyper-text-primary)] placeholder:text-[var(--hyper-text-tertiary)] focus:border-[#F28A24] focus:ring-1 focus:ring-[#F28A24]/30 outline-none transition"
                   />
                 </div>
               </div>
 
-              {/* Field 7: Google Drive Invoice / Bill Attachment */}
+              {/* Field 7: Invoice / Bill Attachment */}
               <div className="pt-1">
-                <DriveFileUpload
+                <StorageFileUpload
                   category="expense_invoice"
                   propertyId={propertyId || undefined}
                   label={isBn ? '৭. বিল / ক্যাশ মেমো কপি (ঐচ্ছিক)' : '7. Invoice / Bill Memo Copy (Optional)'}
-                  description={isBn ? 'Google Drive ক্লাউড ব্যাকআপ' : 'Google Drive cloud vault'}
+                  description={isBn ? 'ব্যক্তিগত Cloudflare R2 স্টোরেজ' : 'Private Cloudflare R2 storage'}
                 />
               </div>
 
@@ -537,7 +522,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-2/3 h-10 rounded-xl bg-[#F28A24] hover:bg-[#E07913] active:bg-[#C9690D] text-white font-semibold text-xs sm:text-sm shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
+                  className="w-2/3 h-10 rounded-xl bg-[var(--hyper-green)] hover:bg-[#1faa43] active:bg-[#168b36] text-white font-semibold text-sm shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer select-none"
                 >
                   {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
                   <span>
@@ -604,4 +589,3 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
 };
 
 export default AddExpensePage;
-

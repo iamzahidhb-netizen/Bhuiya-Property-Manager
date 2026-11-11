@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { HyperCard } from '../ui/hyperos/HyperCard';
 import { PillButton } from '../ui/hyperos/PillButton';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
@@ -37,6 +38,9 @@ export const DashboardCustomizationSettings: React.FC<{ onBack: () => void }> = 
   );
   const [quickActions, setQuickActions] = useState<QuickActionConfig[]>(
     () => [...settings.dashboard.quickActions].sort((a, b) => a.order - b.order)
+  );
+  const [quickExpenseEnabled, setQuickExpenseEnabled] = useState(
+    () => settings.dashboard.quickExpenseEnabled
   );
   const [showLivePreview, setShowLivePreview] = useState(true);
 
@@ -99,6 +103,7 @@ export const DashboardCustomizationSettings: React.FC<{ onBack: () => void }> = 
         sections,
         financialCards,
         quickActions,
+        quickExpenseEnabled,
       },
     });
   }
@@ -107,6 +112,7 @@ export const DashboardCustomizationSettings: React.FC<{ onBack: () => void }> = 
     setSections([...DEFAULT_SETTINGS.dashboard.sections]);
     setFinancialCards([...DEFAULT_SETTINGS.dashboard.financialCards]);
     setQuickActions([...DEFAULT_SETTINGS.dashboard.quickActions]);
+    setQuickExpenseEnabled(DEFAULT_SETTINGS.dashboard.quickExpenseEnabled);
   }
 
   const CARD_ICONS: Record<string, React.ReactNode> = {
@@ -145,9 +151,7 @@ export const DashboardCustomizationSettings: React.FC<{ onBack: () => void }> = 
             <Smartphone className="w-3.5 h-3.5" />
             <span>{showLivePreview ? (isBn ? 'প্রিভিউ বন্ধ' : 'Hide Preview') : (isBn ? 'লাইভ প্রিভিউ' : 'Live Preview')}</span>
           </PillButton>
-          <PillButton variant="ghost" size="sm" onClick={onBack}>
-            ← {isBn ? 'ফিরে যান' : 'Back'}
-          </PillButton>
+          <BackIconButton onClick={onBack} aria-label={isBn ? 'ফিরে যান' : 'Back'} />
         </div>
       </div>
 
@@ -302,6 +306,35 @@ export const DashboardCustomizationSettings: React.FC<{ onBack: () => void }> = 
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={quickExpenseEnabled}
+              onClick={() => setQuickExpenseEnabled((enabled) => !enabled)}
+              className="w-full flex items-center justify-between gap-3 p-3 rounded-[18px] border border-[var(--hyper-border-subtle)] bg-[var(--hyper-bg-card)] text-left transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+            >
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-[var(--hyper-text-primary)]">
+                  {isBn ? 'ড্যাশবোর্ডে দ্রুত খরচ' : 'Quick Expense on Dashboard'}
+                </span>
+                <span className="block mt-0.5 text-[11px] text-[var(--hyper-text-secondary)]">
+                  {isBn ? 'দ্রুত খরচ যোগ করার বাটন দেখান' : 'Show a one-tap expense entry action'}
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  quickExpenseEnabled ? 'bg-[var(--hyper-green)]' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    quickExpenseEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+            </button>
           </HyperCard>
 
           {/* 3. Dashboard Major Sections */}

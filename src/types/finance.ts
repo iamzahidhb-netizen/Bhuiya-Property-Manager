@@ -117,6 +117,8 @@ export type BillStatus = 'unpaid' | 'partial' | 'paid';
 
 export interface RentBill {
   id: string;
+  workspaceId?: string;
+  syncStatus?: 'synced' | 'pending' | 'syncing' | 'failed';
   ownerUid: string;
   propertyId: string;
   propertyName: string;
@@ -143,6 +145,8 @@ export interface RentBill {
 
 export interface RentPayment {
   id: string;
+  workspaceId?: string;
+  syncStatus?: 'synced' | 'pending' | 'syncing' | 'failed';
   ownerUid: string;
   billId: string;
   propertyId: string;
