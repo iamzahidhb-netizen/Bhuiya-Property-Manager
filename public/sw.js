@@ -6,11 +6,12 @@
  *    to provide instant app loading and offline shell availability.
  * 2. It NEVER intercepts, caches, or queues financial mutation requests
  *    (Cloud Functions, Firestore mutations, payment transactions).
- * 3. Offline mutations are strictly prohibited to prevent replay attacks,
- *    stale writes, and double-counting without authoritative server verification.
+ * 3. Financial writes are not intercepted here. The app's separate IndexedDB
+ *    queue owns offline mutations and is never modified by this service worker.
  */
 
-const CACHE_NAME = 'bhuiya-property-manager-v5-hyperos';
+const CACHE_PREFIX = 'bhuiya-property-manager-';
+const CACHE_NAME = `${CACHE_PREFIX}v6-hyperos`;
 
 const STATIC_SHELL_ASSETS = [
   '/',
@@ -26,7 +27,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_SHELL_ASSETS);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -36,18 +37,22 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
+          if (name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME) {
             return caches.delete(name);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
   );
 });
 
 // Fetch: Strategy depending on request type
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   // STRICT BYPASS: Firebase Auth, Firestore, and Cloud Functions are NEVER cached
   if (
@@ -62,45 +67,55 @@ self.addEventListener('fetch', (event) => {
 
   // Navigation requests: Network-First with fallback to cached index.html
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request);
+        if (response && response.status === 200) {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put('/index.html', response.clone());
+          } catch (cacheError) {
+            console.warn('[PWA] Could not update the cached application shell:', cacheError);
           }
-          return response;
-        })
-        .catch(() => {
-          return caches.match('/index.html') || caches.match('/');
-        })
-    );
+        }
+        return response;
+      } catch (networkError) {
+        const cache = await caches.open(CACHE_NAME);
+        const cachedShell = await cache.match('/index.html') || await cache.match('/');
+        if (cachedShell) return cachedShell;
+        throw networkError;
+      }
+    })());
     return;
   }
 
-  // Static Assets (JS, CSS, images, icons): Cache-First, then Network
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          (url.pathname.endsWith('.js') ||
-           url.pathname.endsWith('.css') ||
-           url.pathname.endsWith('.svg') ||
-           url.pathname.endsWith('.png') ||
-           url.pathname.endsWith('.woff2'))
-        ) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+  const isStaticAsset = /\.(js|css|svg|png|woff2)$/.test(url.pathname);
+  if (!isStaticAsset) return;
+
+  const isFingerprintAsset =
+    /\/assets\/[^/]+-[\w-]{8,}\.(js|css)$/.test(url.pathname);
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cachedResponse = await cache.match(event.request);
+
+    if (isFingerprintAsset && cachedResponse) {
+      return cachedResponse;
+    }
+
+    try {
+      const networkResponse = await fetch(event.request);
+      if (networkResponse && networkResponse.status === 200) {
+        try {
+          await cache.put(event.request, networkResponse.clone());
+        } catch (cacheError) {
+          console.warn('[PWA] Could not cache a static asset:', cacheError);
         }
-        return networkResponse;
-      });
-    })
-  );
+      }
+      return networkResponse;
+    } catch (networkError) {
+      if (cachedResponse) return cachedResponse;
+      throw networkError;
+    }
+  })());
 });

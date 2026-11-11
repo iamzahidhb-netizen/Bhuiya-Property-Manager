@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build --mode staging && node poc/phase-10-2a/package-worker.mjs",
     "lint": "eslint .",
     "test:financial": "node --experimental-strip-types poc/phase-10-2a/test-financial-integrity.mjs",
+    "test:pwa-cache": "node poc/phase-10-2a/test-pwa-cache.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
