@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { HyperCard } from '../ui/hyperos/HyperCard';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import type { Property, Unit } from '../../types/property';
 import type { Tenant, TenantFormData, VacateTenantFormData } from '../../types/tenant';
 import type { SecurityDeposit } from '../../types/finance';
@@ -109,7 +111,7 @@ export default function TenantManagementView({
   const totalHeldDeposits = calculateHeldDepositTotal(deposits);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="operations-view space-y-6 animate-fadeIn">
       {/* Top Header Card */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

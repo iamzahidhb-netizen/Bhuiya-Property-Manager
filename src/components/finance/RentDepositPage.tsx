@@ -299,7 +299,7 @@ export const RentDepositPage: React.FC<RentDepositPageProps> = ({
 
   return (
     <div
-      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] ${className}`}
+      className={`operations-view min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased transition-colors duration-200 flex flex-col pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] ${className}`}
       data-testid="rent-deposit-fullpage"
     >
       {/* ===================================================================== */}

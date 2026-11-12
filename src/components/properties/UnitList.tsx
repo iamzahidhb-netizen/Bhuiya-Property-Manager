@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { HyperCard } from '../ui/hyperos/HyperCard';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
+import { HyperCard } from '../ui/hyperos/HyperCard';
+import { StatusBadge } from '../ui/hyperos/StatusBadge';
 import type { Property, Unit, UnitInput } from '../../types/property';
 import {
   subscribeUnits,

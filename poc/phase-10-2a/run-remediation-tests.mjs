@@ -75,11 +75,11 @@ async function run() {
   assert(!actionRegistryCode.includes('workspaces/${workspaceId}/reserveFund'), 'Subcollection workspaces/.../reserveFund replaced with root reserve_funds');
   assert(!actionRegistryCode.includes('workspaces/${workspaceId}/reserveTransactions'), 'Subcollection workspaces/.../reserveTransactions replaced with root reserve_ledger');
 
-  // Verify that canonical root collections are targeted
-  assert(actionRegistryCode.includes("tx.create(tenantPath, tenantId,") && actionRegistryCode.includes("tenantPath = 'tenants'"), 'Tenant mutations target root "tenants" collection');
-  assert(actionRegistryCode.includes("liabilityPath = 'security_deposits'"), 'Deposit liability mutations target root "security_deposits" collection');
-  assert(actionRegistryCode.includes("billPath = 'rent_bills'"), 'Bill mutations target root "rent_bills" collection');
-  assert(actionRegistryCode.includes("paymentPath = 'rent_payments'"), 'Payment mutations target root "rent_payments" collection');
+  // Verify that canonical root collections are targeted (live transaction calls)
+  assert(actionRegistryCode.includes("tx.create('tenants', tenantId,"), 'Tenant mutations target root "tenants" collection');
+  assert(actionRegistryCode.includes("tx.create('security_deposits', depositId,"), 'Deposit liability mutations target root "security_deposits" collection');
+  assert(actionRegistryCode.includes("tx.create('rent_bills', bill.billId,"), 'Bill mutations target root "rent_bills" collection');
+  assert(actionRegistryCode.includes("tx.create('rent_payments', paymentId,"), 'Payment mutations target root "rent_payments" collection');
   assert(actionRegistryCode.includes("expensePath = 'expenses'"), 'Expense mutations target root "expenses" collection');
   assert(actionRegistryCode.includes("reservePath = 'reserve_funds'"), 'Reserve fund mutations target root "reserve_funds" collection');
   assert(actionRegistryCode.includes("txPath = 'reserve_ledger'"), 'Reserve ledger mutations target root "reserve_ledger" collection');

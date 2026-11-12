@@ -51,9 +51,33 @@ import {
 
 interface ReportsAnalyticsViewProps {
   ownerUid: string;
+  /** Rendered inside the Hisab dashboard tab (month is dashboard-controlled). */
+  embedded?: boolean;
+  month?: string;
+  onMonthChange?: (month: string) => void;
 }
 
-export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({ ownerUid }) => {
+/**
+ * Report inputs are read-only snapshots of Firestore data. Legacy bills may
+ * have been written before optional charge fields existed (or as numeric
+ * strings), so values are normalized here instead of letting the strict money
+ * helpers throw during a report render.
+ */
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
+  ownerUid,
+  embedded = false,
+  month,
+  onMonthChange,
+}) => {
   // Collections data state
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -67,7 +91,14 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({ owne
 
   // Filter state
   const [reportType, setReportType] = useState<ReportType>('monthly_statement');
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
+  const [internalMonth, setInternalMonth] = useState<string>('2026-11');
+  // When the dashboard passes a month, it is the source of truth for every
+  // report period so all tabs stay on the same accounting month.
+  const selectedMonth = month ?? internalMonth;
+  const setSelectedMonth = (nextMonth: string) => {
+    setInternalMonth(nextMonth);
+    onMonthChange?.(nextMonth);
+  };
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('all');
   const [selectedTenantId, setSelectedTenantId] = useState<string>('all');
@@ -136,92 +167,145 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({ owne
     return tenants.length > 0 ? tenants[0].id : '';
   }, [selectedTenantId, tenants]);
 
+  // Legacy bills created before the current schema may not carry optional
+  // charge fields (gas/water/service/other). Reports sum those fields, so the
+  // read-only inputs are normalized here (missing -> 0) rather than weakening
+  // the strict money helpers or changing any report formula.
+  const reportBills = useMemo(
+    () =>
+      bills.map((bill) => ({
+        ...bill,
+        rentAmount: toFiniteNumber(bill.rentAmount),
+        gasCharge: toFiniteNumber(bill.gasCharge),
+        waterCharge: toFiniteNumber(bill.waterCharge),
+        serviceCharge: toFiniteNumber(bill.serviceCharge),
+        otherCharges: toFiniteNumber(bill.otherCharges),
+        totalDue: toFiniteNumber(bill.totalDue),
+        totalPaid: toFiniteNumber(bill.totalPaid),
+        balanceDue: toFiniteNumber(bill.balanceDue),
+      })),
+    [bills]
+  );
+
+  const reportPayments = useMemo(
+    () => payments.map((payment) => ({ ...payment, amount: toFiniteNumber(payment.amount) })),
+    [payments]
+  );
+
+  const reportExpenses = useMemo(
+    () => expenses.map((expense) => ({ ...expense, amount: toFiniteNumber(expense.amount) })),
+    [expenses]
+  );
+
+  const reportTenants = useMemo(
+    () =>
+      tenants.map((tenant) => ({
+        ...tenant,
+        monthlyRent: toFiniteNumber(tenant.monthlyRent),
+        gasCharge: toFiniteNumber(tenant.gasCharge),
+        waterCharge: toFiniteNumber(tenant.waterCharge),
+        advanceDeposit: toFiniteNumber(tenant.advanceDeposit),
+      })),
+    [tenants]
+  );
+
+  const reportReserveLedger = useMemo(
+    () =>
+      reserveLedger.map((entry) => ({
+        ...entry,
+        amount: toFiniteNumber(entry.amount),
+        balanceBefore: toFiniteNumber(entry.balanceBefore),
+        balanceAfter: toFiniteNumber(entry.balanceAfter),
+      })),
+    [reserveLedger]
+  );
+
   // Calculated Reports
   const monthlyStatement = useMemo(() => {
     return calculateMonthlyFinancialStatement(
       selectedMonth,
-      payments,
-      bills,
-      expenses,
+      reportPayments,
+      reportBills,
+      reportExpenses,
       distribution,
-      tenants
+      reportTenants
     );
-  }, [selectedMonth, payments, bills, expenses, distribution, tenants]);
+  }, [selectedMonth, reportPayments, reportBills, reportExpenses, distribution, reportTenants]);
 
   const yearlySummary = useMemo(() => {
     return calculateYearlyFinancialSummary(
       selectedYear,
-      payments,
-      expenses,
+      reportPayments,
+      reportExpenses,
       allDistributions
     );
-  }, [selectedYear, payments, expenses, allDistributions]);
+  }, [selectedYear, reportPayments, reportExpenses, allDistributions]);
 
   const propertyIncome = useMemo(() => {
     return calculatePropertyIncomeReport(
       selectedMonth,
       properties,
-      payments,
-      bills,
+      reportPayments,
+      reportBills,
       selectedMonth
     );
-  }, [selectedMonth, properties, payments, bills]);
+  }, [selectedMonth, properties, reportPayments, reportBills]);
 
   const propertyExpense = useMemo(() => {
     return calculatePropertyExpenseReport(
       selectedMonth,
       properties,
-      expenses,
+      reportExpenses,
       selectedMonth
     );
-  }, [selectedMonth, properties, expenses]);
+  }, [selectedMonth, properties, reportExpenses]);
 
   const selectedTenant = useMemo(() => {
-    return tenants.find((t) => t.id === effectiveTenantId) || null;
-  }, [tenants, effectiveTenantId]);
+    return reportTenants.find((t) => t.id === effectiveTenantId) || null;
+  }, [reportTenants, effectiveTenantId]);
 
   const tenantLedger = useMemo(() => {
     if (!selectedTenant) return null;
-    return calculateTenantRentLedger(selectedTenant, bills, payments);
-  }, [selectedTenant, bills, payments]);
+    return calculateTenantRentLedger(selectedTenant, reportBills, reportPayments);
+  }, [selectedTenant, reportBills, reportPayments]);
 
   const outstandingRent = useMemo(() => {
     return calculateOutstandingRentReport(
       selectedMonth,
-      bills,
+      reportBills,
       undefined, // show all outstanding across time for full collection follow-up
       selectedPropertyId
     );
-  }, [selectedMonth, bills, selectedPropertyId]);
+  }, [selectedMonth, reportBills, selectedPropertyId]);
 
   const buildingExpense = useMemo(() => {
     return calculateBuildingExpenseReport(
       selectedMonth,
-      expenses,
+      reportExpenses,
       selectedMonth,
       selectedPropertyId
     );
-  }, [selectedMonth, expenses, selectedPropertyId]);
+  }, [selectedMonth, reportExpenses, selectedPropertyId]);
 
   const familyExpense = useMemo(() => {
-    return calculateFamilyExpenseReport(selectedMonth, expenses, selectedMonth);
-  }, [selectedMonth, expenses]);
+    return calculateFamilyExpenseReport(selectedMonth, reportExpenses, selectedMonth);
+  }, [selectedMonth, reportExpenses]);
 
   const distributionStatement = useMemo(() => {
     return calculateDistributionStatement(distribution);
   }, [distribution]);
 
   const reserveFundStatement = useMemo(() => {
-    return calculateReserveFundStatement(reserveFund, reserveLedger, selectedMonth);
-  }, [reserveFund, reserveLedger, selectedMonth]);
+    return calculateReserveFundStatement(reserveFund, reportReserveLedger, selectedMonth);
+  }, [reserveFund, reportReserveLedger, selectedMonth]);
 
   const netOperatingBalance = useMemo(() => {
     return calculateNetOperatingBalance(selectedMonth, monthlyStatement);
   }, [selectedMonth, monthlyStatement]);
 
   const budgetVsActual = useMemo(() => {
-    return calculateBudgetVsActualReport(selectedMonth, expenses);
-  }, [selectedMonth, expenses]);
+    return calculateBudgetVsActualReport(selectedMonth, reportExpenses);
+  }, [selectedMonth, reportExpenses]);
 
   // CSV Export handler
   function handleExportCSV() {
@@ -586,7 +670,7 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({ owne
   ];
 
   return (
-    <div className="space-y-6 print-container">
+    <div className={`operations-view ${embedded ? 'print-container space-y-3' : 'print-container space-y-6'}`}>
       {/* =====================================================================
           PRINT-ONLY OFFICIAL HEADER (Rendered only during print/PDF)
          ===================================================================== */}
@@ -692,34 +776,37 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({ owne
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
           {/* Period selector */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Month Picker */}
-            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-              <span className="text-xs text-slate-500 font-medium px-2">মাস:</span>
-              <button
-                onClick={handlePrevMonth}
-                className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-xs"
-                title="পূর্ববর্তী মাস"
-              >
-                ◀
-              </button>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(e.target.value);
-                  const yr = Number(e.target.value.split('-')[0]);
-                  if (yr) setSelectedYear(yr);
-                }}
-                className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg px-2.5 py-1"
-              />
-              <button
-                onClick={handleNextMonth}
-                className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-xs"
-                title="পরবর্তী মাস"
-              >
-                ▶
-              </button>
-            </div>
+            {/* Month Picker (hidden when the dashboard owns the month) */}
+            {!embedded && (
+              <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                <span className="text-xs text-slate-500 font-medium px-2">মাস:</span>
+                <button
+                  onClick={handlePrevMonth}
+                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-xs"
+                  title="পূর্ববর্তী মাস"
+                >
+                  ◀
+                </button>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    const yr = Number(e.target.value.split('-')[0]);
+                    if (yr) setSelectedYear(yr);
+                    onMonthChange?.(e.target.value);
+                  }}
+                  className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg px-2.5 py-1"
+                />
+                <button
+                  onClick={handleNextMonth}
+                  className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-xs"
+                  title="পরবর্তী মাস"
+                >
+                  ▶
+                </button>
+              </div>
+            )}
 
             {/* Year Selector */}
             <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">

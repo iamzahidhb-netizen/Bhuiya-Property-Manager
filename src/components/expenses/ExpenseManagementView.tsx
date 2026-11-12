@@ -169,9 +169,9 @@ export default function ExpenseManagementView({
   }, [properties, expenses, selectedMonth, selectedPropertyId]);
 
   return (
-    <div className="space-y-6">
+    <div className="operations-view space-y-6">
       {/* Top Banner: Financial Operating Balance (Actual Income vs Expenses) */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
+      <div className="bg-slate-950 rounded-[var(--radius-section)] p-6 sm:p-8 text-white shadow-[var(--shadow-md)] relative overflow-hidden border border-slate-800">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-medium mb-3 border border-white/15">

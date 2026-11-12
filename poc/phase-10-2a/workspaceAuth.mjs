@@ -10,15 +10,19 @@ export const ACTION_PERMISSIONS = {
   'createPropertyCallable': ['createProperty', 'master_admin'],
   'updatePropertyCallable': ['updateProperty', 'master_admin'],
   'archivePropertyCallable': ['archiveProperty', 'master_admin'],
+  'deletePropertyCallable': ['archiveProperty', 'master_admin'],
 
   // Units & Properties
   'createUnitCallable': ['createUnit', 'canManageTenants', 'master_admin'],
   'renameUnitCallable': ['updateUnit', 'canManageTenants', 'master_admin'],
+  'updateUnitCallable': ['updateUnit', 'canManageTenants', 'master_admin'],
+  'deleteUnitCallable': ['archiveUnit', 'master_admin'],
   'archiveUnitCallable': ['archiveUnit', 'master_admin'],
   'restoreUnitCallable': ['archiveUnit', 'master_admin'],
 
   // Tenants & Leases
   'registerTenantCallable': ['createTenant', 'manageTenants', 'canManageTenants', 'master_admin'],
+  'updateTenantCallable': ['updateTenant', 'manageTenants', 'canManageTenants', 'master_admin'],
   'vacateTenantCallable': ['updateTenant', 'manageTenants', 'canManageTenants', 'master_admin'],
 
   // Rent Billing & Payments
@@ -38,11 +42,18 @@ export const ACTION_PERMISSIONS = {
   'getOrCreateMonthlyDistributionCallable': ['manageFamilyDistribution', 'canViewReports', 'master_admin'],
   'applySpecialAdjustmentCallable': ['manageFamilyDistribution', 'master_admin'],
   'recordBeneficiaryPayoutCallable': ['manageFamilyDistribution', 'master_admin'],
+  'restoreBeneficiaryCallable': ['manageFamilyDistribution', 'master_admin'],
+  'getBeneficiaryHistoryCallable': ['manageFamilyDistribution', 'canViewReports', 'master_admin'],
 
   // Reserve Fund
   'initializeReserveFundCallable': ['manageReserveFund', 'master_admin'],
   'withdrawFromReserveCallable': ['withdrawFromReserve', 'master_admin'],
   'transferSurplusToReserveCallable': ['manageReserveFund', 'master_admin'],
+  'recordReserveTransactionCallable': ['manageReserveFund', 'master_admin'],
+  'reconcileReserveBalanceCallable': ['manageReserveFund', 'master_admin'],
+  'reverseRentPaymentCallable': ['collectRent', 'master_admin'],
+  'cancelRentBillCallable': ['manageRentReceipts', 'master_admin'],
+  'refundSecurityDepositCallable': ['manageTenants', 'master_admin'],
 
   // Workspace & Membership Management (Master Admin ONLY!)
   'listWorkspaceMembersCallable': ['manageWorkspaceMembers', 'master_admin'],

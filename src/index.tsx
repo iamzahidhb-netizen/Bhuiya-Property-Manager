@@ -11,22 +11,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './styles/globals.css';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { generateCSSVars } from './styles/designTokens';
-
-// Apply theme CSS variables
-const themeCSS = generateCSSVars('dark');
-
-// Create a style element to inject theme variables
-const styleElement = document.createElement('style');
-styleElement.textContent = themeCSS;
-document.head.appendChild(styleElement);
+import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <App />
   </React.StrictMode>
 );

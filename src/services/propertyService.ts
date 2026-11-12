@@ -4,7 +4,6 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  updateDoc,
   query,
   where,
   onSnapshot,
@@ -349,41 +348,65 @@ export async function createUnit(input: UnitInput): Promise<string> {
 }
 
 /**
- * Update an existing unit. If the unit number changed, calls renameUnitCallable.
+ * Update an existing unit (number, type, floor, rent, service charge, meters,
+ * notes) through the trusted Callable API. Previously the metadata portion was
+ * written directly from the client, which the Firestore rules correctly
+ * reject; this now routes the whole update through the server.
  */
 export async function updateUnit(
   unitId: string,
   input: Partial<UnitInput>
 ): Promise<void> {
-  if (input.unitNumber !== undefined && input.propertyId) {
-    const renameFn = createCallable<{
-      propertyId: string;
+  const updateFn = createCallable<
+    {
       unitId: string;
-      newUnitNumber: string;
-    }, { success: boolean }>('renameUnitCallable');
+      propertyId?: string;
+      unitNumber?: string;
+      type?: string;
+      floor?: number;
+      monthlyRent?: number;
+      serviceCharge?: number;
+      notes?: string;
+      electricityMeterNumber?: string;
+      gasMeterNumber?: string;
+    },
+    { success: boolean; unitId: string }
+  >('updateUnitCallable');
 
-    await renameFn({
-      propertyId: input.propertyId,
-      unitId,
-      newUnitNumber: input.unitNumber,
-    });
-  }
+  await updateFn({
+    unitId,
+    propertyId: input.propertyId,
+    unitNumber: input.unitNumber,
+    type: input.type,
+    floor: input.floor !== undefined ? Number(input.floor) : undefined,
+    monthlyRent: input.monthlyRent !== undefined ? Number(input.monthlyRent) : undefined,
+    serviceCharge: input.serviceCharge !== undefined ? Number(input.serviceCharge) : undefined,
+    notes: input.notes,
+    electricityMeterNumber: input.electricityMeterNumber,
+    gasMeterNumber: input.gasMeterNumber,
+  });
+}
 
-  const unitRef = doc(db, UNITS_COLL, unitId);
-  const metadataUpdate: Record<string, unknown> = {
-    updatedAt: serverTimestamp(),
-  };
+/**
+ * Permanently delete an archived unit that has no billing or tenant history.
+ */
+export async function deleteUnit(unitId: string, propertyId?: string): Promise<void> {
+  const deleteFn = createCallable<
+    { unitId: string; propertyId?: string },
+    { success: boolean; unitId: string }
+  >('deleteUnitCallable');
+  await deleteFn({ unitId, propertyId });
+}
 
-  if (input.type !== undefined) metadataUpdate.type = input.type;
-  if (input.floor !== undefined) metadataUpdate.floor = Number(input.floor) || 1;
-  if (input.serviceCharge !== undefined) metadataUpdate.serviceCharge = Number(input.serviceCharge) || 0;
-  if (input.notes !== undefined) metadataUpdate.notes = input.notes.trim();
-  if (input.electricityMeterNumber !== undefined) metadataUpdate.electricityMeterNumber = input.electricityMeterNumber.trim();
-  if (input.gasMeterNumber !== undefined) metadataUpdate.gasMeterNumber = input.gasMeterNumber.trim();
-
-  if (Object.keys(metadataUpdate).length > 1) {
-    await updateDoc(unitRef, metadataUpdate);
-  }
+/**
+ * Permanently delete an archived property with no units, tenants or bills.
+ */
+export async function deleteProperty(propertyId: string): Promise<void> {
+  const deleteFn = createCallable<
+    { propertyId: string },
+    { success: boolean; propertyId: string }
+  >('deletePropertyCallable');
+  await deleteFn({ propertyId });
 }
 
 /**
@@ -414,3 +437,4 @@ export async function archiveUnit(
     await restoreFn({ propertyId: targetPropId, unitId });
   }
 }
+

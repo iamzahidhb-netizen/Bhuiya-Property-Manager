@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { House, BookOpen, Files, ReceiptText, Wallet, UserRound } from 'lucide-react';
+import { useMediaQuery } from 'react-responsive';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { type NavItemConfig, DEFAULT_ANIMATION_SETTINGS } from '../../../types/settings';
 
-export type MainNavSection = 'home' | 'accounts' | 'documents' | 'profile' | 'settings' | 'rent-deposit' | 'add-expense';
+export type MainNavSection = 'home' | 'accounts' | 'documents' | 'profile' | 'settings' | 'admin-control' | 'rent-deposit' | 'add-expense';
 
 export interface FloatingPillNavProps {
   activeSection: MainNavSection;
@@ -37,14 +38,17 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
   const { t, currentLanguage } = useLanguage();
   const { settings } = useSettings();
   const configuredNavItems = settings?.navigation?.items;
-  const navbarStyle = settings?.appearance?.navigationAnimation?.navbarAnimation || DEFAULT_ANIMATION_SETTINGS.navbarAnimation;
+  const navbarStyle = isMobile ? 'scale' : settings?.appearance?.navigationAnimation?.navbarAnimation || DEFAULT_ANIMATION_SETTINGS.navbarAnimation;
   const animSpeed = settings?.appearance?.navigationAnimation?.speed || DEFAULT_ANIMATION_SETTINGS.speed;
 
-  const isBn = currentLanguage === 'bn';
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+const isBn = currentLanguage === 'bn';
   const isHomeActive = activeSection === 'home' && !drillDownView;
-  const isAccountsActive = activeSection === 'accounts' && !drillDownView;
+  // Accounts stays highlighted while one of its financial module tabs is open,
+  // because tabs are navigation entries inside the accounts dashboard.
+  const isAccountsActive = activeSection === 'accounts';
   const isDocumentsActive = activeSection === 'documents' && !drillDownView;
-  const isProfileActive = activeSection === 'profile' && !drillDownView;
+  const isProfileActive = (activeSection === 'profile' || activeSection === 'admin-control') && !drillDownView;
   const isNewExpenseActive = activeSection === 'add-expense' && !drillDownView;
   const isRentDepositActive = activeSection === 'rent-deposit' && !drillDownView;
 
@@ -120,18 +124,20 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
     }
   }, [animSpeed]);
 
-  const getItemClass = (isActive: boolean, activeBgClass: string) => {
+  const getItemClass = (isActive: boolean, activeBgClass: string, isAction = false) => {
     if (!isActive) {
-      return 'hyper-nav-item hyper-nav-inactive text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 relative z-10';
+      return `hyper-nav-item text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-[var(--surface-hover)] relative z-10 ${
+        isAction ? 'border border-[var(--border-subtle)] bg-[var(--surface-card-subtle)]' : ''
+      }`;
     }
     if (navbarStyle === 'smooth-indicator') {
       return 'hyper-nav-item text-white font-bold relative z-10 transition-colors duration-200';
     }
     if (navbarStyle === 'scale') {
-      return `hyper-nav-item ${activeBgClass} text-white shadow-md font-bold hyper-nav-scale-active relative z-10`;
+      return `hyper-nav-item ${activeBgClass} text-white font-bold relative z-10`;
     }
     // 'slide' style
-    return `hyper-nav-item ${activeBgClass} text-white font-bold hyper-nav-slide-active relative z-10`;
+    return `hyper-nav-item ${activeBgClass} text-white font-bold relative z-10`;
   };
 
   const renderNavItem = (item: NavItemConfig) => {
@@ -147,7 +153,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('home')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isHomeActive,
-              'bg-[#22B84A] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]'
             )}`}
           >
             <House
@@ -172,7 +178,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('accounts')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isAccountsActive,
-              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]'
             )}`}
           >
             <BookOpen
@@ -197,7 +203,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('documents')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isDocumentsActive,
-              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]'
             )}`}
           >
             <Files
@@ -224,7 +230,8 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={onOpenNewExpense}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed ${getItemClass(
               isNewExpenseActive,
-              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]',
+              true
             )}`}
           >
             <div className="relative flex items-center justify-center">
@@ -259,7 +266,8 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={onOpenRentPayment}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 disabled:opacity-40 disabled:cursor-not-allowed ${getItemClass(
               isRentDepositActive,
-              'bg-[#22B84A] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]',
+              true
             )}`}
           >
             <div className="relative flex items-center justify-center">
@@ -292,7 +300,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
             onClick={() => onSelectSection('profile')}
             className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full select-none cursor-pointer group min-w-0 ${getItemClass(
               isProfileActive,
-              'bg-[var(--hyper-green)] shadow-[#22B84A]/30'
+              'bg-[var(--color-primary-fill)]'
             )}`}
           >
             <UserRound
@@ -313,13 +321,13 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
 
   return (
     <div
-      className={`fixed bottom-3 sm:bottom-6 inset-x-2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 w-[calc(100%-1rem)] sm:w-[480px] md:w-[500px] z-50 pointer-events-auto pb-[env(safe-area-inset-bottom)] ${speedClass} ${className}`}
+      className={`fixed bottom-3 sm:bottom-5 inset-x-2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 w-[calc(100%-1rem)] sm:w-[480px] md:w-[520px] z-50 pointer-events-auto pb-[env(safe-area-inset-bottom)] ${speedClass} ${className}`}
       data-testid="hyperos-floating-pill-nav"
       data-navbar-style={navbarStyle}
     >
       <nav
         aria-label={t('navigation.mainNavAria')}
-        className={`hyper-glass-nav relative rounded-full border border-[var(--hyper-border-glass)] [box-shadow:var(--hyper-inner-highlight),var(--hyper-shadow-nav)] p-1.5 grid items-center gap-1 transition-all duration-200 ${
+        className={`relative rounded-[var(--radius-section)] border border-[var(--border-subtle)] bg-[var(--surface-card)] [box-shadow:var(--shadow-md)] p-1 grid items-center gap-1 transition-colors duration-200 ${
           navbarStyle === 'slide' ? 'overflow-visible' : 'overflow-hidden'
         }`}
         style={{
@@ -335,7 +343,7 @@ export const FloatingPillNav: React.FC<FloatingPillNavProps> = ({
               left: '2px',
               transform: `translateX(calc(${activeIndex * 100}% + ${activeIndex * 4}px))`,
               backgroundColor: activeColor,
-              boxShadow: `0 4px 14px ${activeColor}40`,
+              boxShadow: 'var(--shadow-sm)',
             }}
             aria-hidden="true"
           />

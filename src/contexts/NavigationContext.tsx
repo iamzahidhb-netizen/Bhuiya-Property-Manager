@@ -18,6 +18,7 @@ export type NavSection =
   | 'documents'
   | 'profile'
   | 'settings'
+  | 'admin-control'
   | 'rent-deposit'
   | 'add-expense';
 
@@ -104,6 +105,7 @@ function computeHash(state: NavState): string {
   if (state.section === 'rent-deposit') return '#/rent-deposit';
   if (state.section === 'add-expense') return '#/add-expense';
   if (state.section === 'profile') return '#/profile';
+  if (state.section === 'admin-control') return '#/admin';
   return '#/home';
 }
 
@@ -155,6 +157,14 @@ export function parseStateFromHash(hash: string): NavState {
   if (hash === '#/profile') {
     return {
       section: 'profile',
+      drillDownView: null,
+      settingsCategory: null,
+      preSelectedTenantId: null,
+    };
+  }
+  if (hash === '#/admin') {
+    return {
+      section: 'admin-control',
       drillDownView: null,
       settingsCategory: null,
       preSelectedTenantId: null,
@@ -365,6 +375,30 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({
         setTransitionNonce((n) => n + 1);
         setNavState(payload.state);
       } else {
+        // Same-document navigation without our payload (for example a deep
+        // link pasted while the app is already open, or an Android intent).
+        // Adopt the URL hash instead of discarding it and resetting to home.
+        const deepLinkState = parseStateFromHash(window.location.hash || '');
+        const deepLinkKey = computePageKey(deepLinkState);
+        if (deepLinkKey !== 'home') {
+          if (computePageKey(navStateRef.current) !== deepLinkKey) {
+            stepRef.current += 1;
+            setDirection('forward');
+            setTransitionNonce((n) => n + 1);
+            setNavState(deepLinkState);
+          }
+          window.history.replaceState(
+            {
+              app: 'anwar-bhuiyan-property',
+              step: stepRef.current,
+              state: deepLinkState,
+            },
+            '',
+            computeHash(deepLinkState)
+          );
+          return;
+        }
+
         // User popped past initial entry or entered from outside:
         // Return cleanly to Dashboard Home instead of exiting
         stepRef.current = 1;

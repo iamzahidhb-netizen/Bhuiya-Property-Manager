@@ -189,7 +189,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({
 
   return (
     <div
-      className={`min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] flex flex-col ${className}`}
+      className={`operations-view min-h-screen bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] flex flex-col ${className}`}
       data-testid="hyperos-settings-center"
     >
       {/* Toast Notice */}

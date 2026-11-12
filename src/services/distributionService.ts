@@ -215,6 +215,18 @@ export async function archiveBeneficiary(beneficiaryId: string): Promise<{ succe
   return res.data;
 }
 
+export async function restoreBeneficiary(beneficiaryId: string): Promise<{ success: boolean }> {
+  const fn = createCallable<{ beneficiaryId: string }, { success: boolean }>('restoreBeneficiaryCallable');
+  const res = await fn({ beneficiaryId });
+  return res.data;
+}
+
+export async function getBeneficiaryHistory(beneficiaryId: string): Promise<{ success: boolean; history: unknown[] }> {
+  const fn = createCallable<{ beneficiaryId: string }, { success: boolean; history: unknown[] }>('getBeneficiaryHistoryCallable');
+  const res = await fn({ beneficiaryId });
+  return res.data;
+}
+
 /**
  * Get or create an immutable monthly distribution snapshot.
  */
@@ -273,5 +285,11 @@ export async function withdrawFromReserve(input: ReserveWithdrawalInput): Promis
 export async function transferSurplusToReserve(input: ReserveTransferInput): Promise<{ success: boolean; newBalance: number }> {
   const fn = createCallable<ReserveTransferInput, { success: boolean; newBalance: number }>('transferSurplusToReserveCallable');
   const res = await fn(input);
+  return res.data;
+}
+
+export async function reconcileReserveBalance(): Promise<Record<string, unknown>> {
+  const fn = createCallable<unknown, Record<string, unknown>>('reconcileReserveBalanceCallable');
+  const res = await fn({});
   return res.data;
 }

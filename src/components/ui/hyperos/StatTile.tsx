@@ -19,28 +19,28 @@ export interface StatTileProps {
 const colorMap: Record<StatTileColor, { badgeBg: string; iconColor: string; amountColor: string }> = {
   green: {
     badgeBg: 'bg-[var(--hyper-green-bg)]',
-    iconColor: 'text-[#22B84A]',
-    amountColor: 'text-[#22B84A]',
+    iconColor: 'text-[var(--color-primary-ink)]',
+    amountColor: 'text-[var(--color-primary-ink)]',
   },
   blue: {
     badgeBg: 'bg-[var(--hyper-blue-bg)]',
-    iconColor: 'text-[#1685E8]',
-    amountColor: 'text-[#1685E8]',
+    iconColor: 'text-[var(--color-info-ink)]',
+    amountColor: 'text-[var(--color-info-ink)]',
   },
   orange: {
     badgeBg: 'bg-[var(--hyper-orange-bg)]',
-    iconColor: 'text-[#F28A24]',
-    amountColor: 'text-[#F28A24]',
+    iconColor: 'text-[var(--color-warning-ink)]',
+    amountColor: 'text-[var(--color-warning-ink)]',
   },
   purple: {
     badgeBg: 'bg-[var(--hyper-purple-bg)]',
-    iconColor: 'text-[#7655E8]',
-    amountColor: 'text-[#7655E8]',
+    iconColor: 'text-[var(--color-admin-ink)]',
+    amountColor: 'text-[var(--color-admin-ink)]',
   },
   red: {
     badgeBg: 'bg-[var(--hyper-red-bg)]',
-    iconColor: 'text-[#E94B4B]',
-    amountColor: 'text-[#E94B4B]',
+    iconColor: 'text-[var(--color-danger-ink)]',
+    amountColor: 'text-[var(--color-danger-ink)]',
   },
 };
 

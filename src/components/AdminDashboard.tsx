@@ -8,8 +8,6 @@ import { subscribeRentBills, subscribeRentPayments } from '../services/rentServi
 import { subscribeExpenses } from '../services/expenseService';
 import {
   calculateOperatingSummary,
-  getExpenseBillingMonth,
-  getPaymentBillingMonth,
 } from '../services/financialSummary';
 import type { Property, Unit } from '../types/property';
 import type { Tenant } from '../types/tenant';
@@ -32,22 +30,16 @@ import { ProfilePhotoModal } from './profile/ProfilePhotoModal';
 // Lucide Icons
 import {
   Building2,
-  ChevronLeft,
   ChevronRight,
   Calendar,
   House,
   BookOpen,
   UserRound,
   ArrowDownLeft,
-  ArrowUpRight,
-  Clock,
   TrendingDown,
   Coins,
-  CreditCard,
   ReceiptText,
-  BarChart3,
   Users,
-  Scale,
   Hourglass,
   SlidersHorizontal,
   KeyRound,
@@ -57,6 +49,7 @@ import {
   Camera,
   Check,
   Plus,
+  ShieldCheck,
 } from 'lucide-react';
 
 // Modals for Property, Unit, Tenant creation
@@ -68,16 +61,12 @@ import { StatusBadge } from './ui/hyperos/StatusBadge';
 import { HyperCard, StatTile, FloatingPillNav, PageTransitionContainer } from './ui/hyperos';
 import { SyncStatusBar } from './ui/SyncStatusBar';
 import { StorageLibraryPage } from './storage/StorageLibraryPage';
+import HisabDashboard, { type HisabTab } from './accounts/HisabDashboard';
+import AdminControlCenter from './admin/AdminControlCenter';
 
 // Existing Sub-Views (Lazy Loaded for drill-downs & full view access)
 const PropertyManagementView = lazy(() => import('./properties/PropertyManagementView'));
 const TenantManagementView = lazy(() => import('./tenants/TenantManagementView'));
-const RentManagementView = lazy(() => import('./rent/RentManagementView'));
-const ExpenseManagementView = lazy(() => import('./expenses/ExpenseManagementView'));
-const DistributionManagementView = lazy(() => import('./distribution/DistributionManagementView'));
-const ReportsAnalyticsView = lazy(() =>
-  import('./reports/ReportsAnalyticsView').then((m) => ({ default: m.ReportsAnalyticsView }))
-);
 
 function TabLoadingFallback() {
   return (
@@ -150,6 +139,24 @@ export default function AdminDashboard() {
 
   const animSettings = settings?.appearance?.navigationAnimation || DEFAULT_ANIMATION_SETTINGS;
 
+  // The accounts section is a single-page dashboard; each tab is a navigation
+  // entry so Android hardware back, browser history and deep links all work.
+  const isHisabTabView =
+    drillDownView === 'rent' ||
+    drillDownView === 'expenses' ||
+    drillDownView === 'distribution' ||
+    drillDownView === 'reports';
+  const isHisabDashboard =
+    activeSection === 'accounts' && (drillDownView === null || isHisabTabView);
+  const hisabTab: HisabTab =
+    drillDownView === 'expenses'
+      ? 'expenses'
+      : drillDownView === 'distribution'
+      ? 'distribution'
+      : drillDownView === 'reports'
+      ? 'reports'
+      : 'rent';
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -160,8 +167,9 @@ export default function AdminDashboard() {
     }
   }
 
-  // Month state (YYYY-MM)
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+  // Home dashboard summarizes the current month. The accounts page owns its
+  // own month selector inside the Hisab dashboard (and syncs every module tab).
+  const [selectedMonth] = useState<string>(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -279,36 +287,6 @@ export default function AdminDashboard() {
     };
   }, [user, workspaceId]);
 
-  // Month navigation helpers
-  function handlePrevMonth() {
-    const [yStr, mStr] = selectedMonth.split('-');
-    let y = parseInt(yStr, 10);
-    let m = parseInt(mStr, 10) - 1;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    }
-    setSelectedMonth(`${y}-${String(m).padStart(2, '0')}`);
-  }
-
-  function handleNextMonth() {
-    const [yStr, mStr] = selectedMonth.split('-');
-    let y = parseInt(yStr, 10);
-    let m = parseInt(mStr, 10) + 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    setSelectedMonth(`${y}-${String(m).padStart(2, '0')}`);
-  }
-
-  function handleCurrentMonth() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    setSelectedMonth(`${y}-${m}`);
-  }
-
   // Filtered calculations for selectedMonth
   const activeProperties = properties.filter((p) => !p.isArchived);
   const activeUnits = units.filter((u) => !u.isArchived);
@@ -328,17 +306,11 @@ export default function AdminDashboard() {
   };
 
   const operatingSummary = calculateOperatingSummary(selectedMonth, payments, expenses);
-  const selectedMonthPayments = payments.filter(
-    (payment) => getPaymentBillingMonth(payment) === selectedMonth
-  );
   const totalRentCollected = operatingSummary.actualRentCollected;
 
   const selectedMonthBills = bills.filter((b) => (b.billingMonth || resolveDateMonth(b.createdAt)) === selectedMonth);
   const totalRentDue = sumMoney(selectedMonthBills, (bill) => bill.balanceDue);
 
-  const selectedMonthExpenses = expenses.filter(
-    (expense) => getExpenseBillingMonth(expense) === selectedMonth && expense.status === 'active'
-  );
   const totalExpenses = operatingSummary.totalActualExpenses;
 
   // Payouts for family members (Brother 1, 2, 3 target 45k each)
@@ -347,16 +319,6 @@ export default function AdminDashboard() {
     subtractMoney(totalRentCollected, totalExpenses),
     familyPayoutsTotal
   );
-
-  // Active tenant card helper
-  function getTenantMonthStatus(tItem: Tenant) {
-    const bill = selectedMonthBills.find((b) => b.tenantId === tItem.id);
-    const paid = bill ? bill.totalPaid : 0;
-    const due = bill ? bill.balanceDue : tItem.monthlyRent || 0;
-    const isPaid = bill?.status === 'paid' || (due === 0 && paid > 0);
-    const isPartial = paid > 0 && due > 0;
-    return { paid, due, isPaid, isPartial };
-  }
 
   // Navigation helpers for full-page financial workflows
   function handleOpenRentDeposit(tenantId?: string | null) {
@@ -553,23 +515,74 @@ export default function AdminDashboard() {
     );
   }
 
-  return (
-    <div className="min-h-screen hyper-ambient-bg flex flex-col text-[var(--hyper-text-primary)] antialiased relative overflow-x-hidden">
-      {/* Dynamic Ambient Background Highlights */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true" style={{ contain: 'strict' }}>
-        <div className="absolute top-10 right-10 w-[500px] h-[500px] bg-[#22B84A]/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-10 w-[450px] h-[450px] bg-[#1685E8]/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/3 w-[600px] h-[600px] bg-[#22B84A]/5 rounded-full blur-3xl" />
+  if (activeSection === 'admin-control') {
+    return (
+      <div className="min-h-screen flex flex-col bg-[var(--hyper-bg-base)] text-[var(--hyper-text-primary)] antialiased">
+        <AdminControlCenter
+          ownerUid={currentOwnerUid}
+          workspaceId={workspaceId}
+          isMasterAdmin={isMasterAdmin}
+          properties={properties}
+          units={units}
+          tenants={tenants}
+          bills={bills}
+          payments={payments}
+          expenses={expenses}
+          onBack={goBack}
+          onOpenPropertyManagement={() => setDrillDownView('properties')}
+          onOpenTenantManagement={() => setDrillDownView('tenants')}
+          onOpenRentManagement={() => setDrillDownView('rent')}
+          onOpenExpenseManagement={() => setDrillDownView('expenses')}
+          onOpenDistribution={() => setDrillDownView('distribution')}
+          onOpenReports={() => setDrillDownView('reports')}
+          onOpenSettings={() => navigateTo('settings')}
+          onOpenMembers={() => {
+            navigateTo('profile');
+            setMemberManagementModalOpen(true);
+          }}
+          onOpenStorage={() => navigateTo('documents')}
+          onCreateTenant={() => {
+            navigateTo('accounts');
+            setTenantModalOpen(true);
+          }}
+        />
+        <div className="h-24" aria-hidden="true" />
+        <FloatingPillNav
+          activeSection={activeSection}
+          drillDownView={null}
+          onSelectSection={(section) => navigateTo(section)}
+          onOpenNewExpense={() => {
+            if (!canAccessTab('expenses')) {
+              alert('আপনার খরচ যুক্ত করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenAddExpense();
+          }}
+          onOpenRentPayment={() => {
+            if (!canAccessTab('rent')) {
+              alert('আপনার ভাড়া আদায় করার অনুমতি নেই।');
+              return;
+            }
+            handleOpenRentDeposit(null);
+          }}
+          canCreateExpense={canAccessTab('expenses')}
+          canCollectRent={canAccessTab('rent')}
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col text-[var(--hyper-text-primary)] antialiased relative overflow-x-hidden">
 
       {/* ========================================================================= */}
       {/* 1. TOP HEADER                                                             */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-[var(--hyper-bg-card)]/80 backdrop-blur-xl border-b border-[var(--hyper-border-subtle)] shadow-xs transition-colors duration-200">
+      <header className="sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           {/* Official Brand Logo & Name */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-[16px] bg-white dark:bg-[#252528] p-1.5 shadow-sm border border-[var(--hyper-border-subtle)] flex items-center justify-center shrink-0 overflow-hidden">
+            <div className="w-11 h-11 rounded-[var(--radius-control)] bg-[var(--surface-card-subtle)] p-1.5 border border-[var(--border-subtle)] flex items-center justify-center shrink-0 overflow-hidden">
               <img
                 src="/brand/anwar-bhuiyan-property.svg"
                 alt="Anwar Bhuiyan Property Logo"
@@ -589,14 +602,14 @@ export default function AdminDashboard() {
           {/* Right Controls: Desktop Nav Pills & Compact Language Selector */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Desktop 3-Section Floating Navigation Dock */}
-            <div className="hidden md:flex items-center gap-1.5 p-1 rounded-full border border-[var(--hyper-border)] shadow-xs bg-[var(--hyper-bg-card)]">
+            <div className="hidden md:flex items-center gap-1 p-1 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-card-subtle)]">
               <button
                 type="button"
                 onClick={() => navigateTo('home')}
-                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                className={`px-3 py-2 rounded-[calc(var(--radius-control)-4px)] transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'home' && !drillDownView
-                    ? 'bg-[#22B84A] text-white shadow-sm shadow-[#22B84A]/30'
-                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
+                    ? 'bg-[var(--color-primary-fill)] text-white'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 <House className="w-3.5 h-3.5" />
@@ -606,10 +619,10 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => navigateTo('accounts')}
-                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
-                  activeSection === 'accounts' && !drillDownView
-                    ? 'bg-[var(--hyper-green)] text-white shadow-sm shadow-[#22B84A]/25'
-                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
+                className={`px-3 py-2 rounded-[calc(var(--radius-control)-4px)] transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                  activeSection === 'accounts'
+                    ? 'bg-[var(--color-primary-fill)] text-white'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -619,10 +632,10 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => navigateTo('profile')}
-                className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                className={`px-3 py-2 rounded-[calc(var(--radius-control)-4px)] transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                   activeSection === 'profile' && !drillDownView
-                    ? 'bg-[var(--hyper-green)] text-white shadow-sm shadow-[#22B84A]/25'
-                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-black/5 dark:hover:bg-white/5'
+                    ? 'bg-[var(--color-primary-fill)] text-white'
+                    : 'text-[var(--hyper-text-secondary)] hover:text-[var(--hyper-text-primary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 <UserRound className="w-3.5 h-3.5" />
@@ -638,7 +651,13 @@ export default function AdminDashboard() {
       {/* ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-32 pb-[calc(env(safe-area-inset-bottom)+7rem)] flex-1 w-full">
         <PageTransitionContainer
-          transitionKey={drillDownView ? `accounts-${drillDownView}` : activeSection}
+          transitionKey={
+            isHisabDashboard
+              ? 'accounts-dashboard'
+              : drillDownView
+              ? `accounts-${drillDownView}`
+              : activeSection
+          }
           direction={direction}
           style={animSettings.pageTransition}
           speed={animSettings.speed}
@@ -646,7 +665,7 @@ export default function AdminDashboard() {
           className="space-y-6"
         >
         {/* Drill-down Back Button if inside a detailed view */}
-        {drillDownView && (
+        {drillDownView && !isHisabDashboard && (
           <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
             <button
               onClick={goBack}
@@ -675,35 +694,6 @@ export default function AdminDashboard() {
               units={units}
               workspaceId={workspaceId}
             />
-          </Suspense>
-        )}
-
-        {drillDownView === 'rent' && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <RentManagementView
-              ownerUid={currentOwnerUid}
-              properties={properties}
-              units={units}
-              tenants={tenants}
-            />
-          </Suspense>
-        )}
-
-        {drillDownView === 'expenses' && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <ExpenseManagementView ownerUid={currentOwnerUid} properties={properties} />
-          </Suspense>
-        )}
-
-        {drillDownView === 'distribution' && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <DistributionManagementView ownerUid={currentOwnerUid} />
-          </Suspense>
-        )}
-
-        {drillDownView === 'reports' && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <ReportsAnalyticsView ownerUid={currentOwnerUid} />
           </Suspense>
         )}
 
@@ -753,7 +743,7 @@ export default function AdminDashboard() {
 
             {/* Dynamic Financial Summary Cards (Ordered & Configured via Admin Settings) */}
             {settings.dashboard.sections.find((s) => s.id === 'financialSummary')?.visible !== false && (
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-5">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 {[...settings.dashboard.financialCards]
                   .filter((c) => c.visible)
                   .sort((a, b) => a.order - b.order)
@@ -814,6 +804,34 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            <HyperCard className="p-4 sm:p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-[var(--hyper-text-primary)]">
+                    {isBn ? 'সম্পত্তির সারসংক্ষেপ' : 'Property overview'}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-[var(--hyper-text-secondary)]">
+                    {isBn ? 'সক্রিয় রেকর্ডের বর্তমান অবস্থা' : 'Current status of active records'}
+                  </p>
+                </div>
+                <Building2 className="h-5 w-5 text-[var(--color-primary-fill)]" aria-hidden="true" />
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-[var(--border-subtle)]">
+                <div className="min-w-0 pr-3">
+                  <p className="text-2xl font-bold tabular-nums text-[var(--hyper-text-primary)]">{activeProperties.length}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--hyper-text-secondary)]">{isBn ? 'সম্পত্তি' : 'Properties'}</p>
+                </div>
+                <div className="min-w-0 px-3">
+                  <p className="text-2xl font-bold tabular-nums text-[var(--hyper-text-primary)]">{activeUnits.length}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--hyper-text-secondary)]">{isBn ? 'ইউনিট' : 'Units'}</p>
+                </div>
+                <div className="min-w-0 pl-3">
+                  <p className="text-2xl font-bold tabular-nums text-[var(--hyper-text-primary)]">{activeTenants.length}</p>
+                  <p className="mt-1 text-xs font-medium text-[var(--hyper-text-secondary)]">{isBn ? 'ভাড়াটিয়া' : 'Tenants'}</p>
+                </div>
+              </div>
+            </HyperCard>
+
             {settings.dashboard.quickExpenseEnabled && canAccessTab('expenses') && (
               <button
                 type="button"
@@ -821,11 +839,11 @@ export default function AdminDashboard() {
                   if (!canAccessTab('expenses')) return;
                   handleOpenAddExpense();
                 }}
-                className="group flex w-full items-center justify-between gap-4 rounded-[24px] border border-[var(--hyper-green)]/25 bg-gradient-to-r from-[var(--hyper-green)]/[0.10] via-[var(--hyper-green)]/[0.06] to-transparent p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--hyper-green)]/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--hyper-green)] focus-visible:ring-offset-2"
+                className="group flex w-full items-center justify-between gap-4 rounded-[var(--radius-card)] border border-[var(--color-primary-fill)]/25 bg-[var(--color-primary-tint)] p-4 text-left transition-colors hover:border-[var(--color-primary-fill)]/45 hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary-fill)] focus-visible:ring-offset-2"
                 aria-label={isBn ? 'দ্রুত খরচ যোগ করুন' : 'Add a quick expense'}
               >
                 <span className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--hyper-green)] text-white shadow-sm shadow-[var(--hyper-green)]/20 transition-transform duration-200 group-hover:scale-105">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--color-primary-fill)] text-white">
                     <ReceiptText className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
@@ -837,7 +855,7 @@ export default function AdminDashboard() {
                     </span>
                   </span>
                 </span>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--hyper-green)]/10 text-[var(--hyper-green)] transition-transform duration-200 group-hover:translate-x-0.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-card)] text-[var(--color-primary-fill)] border border-[var(--color-primary-fill)]/20">
                   <Plus className="h-4 w-4" />
                 </span>
               </button>
@@ -845,11 +863,11 @@ export default function AdminDashboard() {
 
             {/* Optional Quick Actions Bar from Settings */}
             {settings.dashboard.sections.find((s) => s.id === 'quickActions')?.visible && (
-              <HyperCard className="space-y-3 p-3.5 sm:p-4">
+              <HyperCard className="space-y-3 p-4 sm:p-5">
                 <div className="text-xs font-bold text-[var(--hyper-text-secondary)] uppercase tracking-wider">
                   {isBn ? 'দ্রুত কাজ (Quick Actions)' : 'Quick Actions'}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {settings.dashboard.quickActions
                     .filter((qa) => qa.visible)
                     .filter((action, index, actions) => actions.findIndex((item) => item.id === action.id) === index)
@@ -868,7 +886,7 @@ export default function AdminDashboard() {
                           (qa.id === 'newExpense' && !canAccessTab('expenses')) ||
                           (qa.id === 'rentDeposit' && !canAccessTab('rent'))
                         }
-                        className="flex cursor-pointer flex-col items-center gap-1.5 rounded-[18px] border border-transparent bg-black/5 p-3 text-xs font-bold text-[var(--hyper-text-primary)] transition-all hover:border-[var(--hyper-border-subtle)] hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--hyper-green)] disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white/5"
+                        className="flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-subtle)] bg-[var(--surface-card-subtle)] p-3 text-xs font-bold text-[var(--hyper-text-primary)] transition-colors hover:border-[var(--color-primary-fill)]/35 hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary-fill)] disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <span>{isBn ? qa.labelBn : qa.labelEn}</span>
                       </button>
@@ -882,488 +900,27 @@ export default function AdminDashboard() {
         {/* --------------------------------------------------------------------- */}
         {/* SECTION 2: হিসাব (ACCOUNTS / KHATA)                                   */}
         {/* --------------------------------------------------------------------- */}
-        {!drillDownView && activeSection === 'accounts' && (
-          <div className="space-y-4 sm:space-y-5">
-            {/* Monthly Accounting Header Cards */}
-            <div className="space-y-4 rounded-[26px] bg-gradient-to-br from-emerald-800 to-teal-900 p-4 text-white shadow-lg shadow-emerald-950/15 sm:space-y-5 sm:rounded-3xl sm:p-6">
-              <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                <div className="min-w-0">
-                  <span className="text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                    {t('accounts.monthlyKhata')}
-                  </span>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={handlePrevMonth}
-                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer"
-                      title="Previous Month"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-white" />
-                    </button>
-                    <h2 className="min-w-0 text-lg font-black sm:text-2xl">{formatLocalizedMonth(selectedMonth, currentLanguage)}</h2>
-                    <button
-                      onClick={handleNextMonth}
-                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer"
-                      title="Next Month"
-                    >
-                      <ChevronRight className="w-4 h-4 text-white" />
-                    </button>
-                    <button
-                      onClick={handleCurrentMonth}
-                      className="px-3 py-1 rounded-full bg-emerald-500/30 hover:bg-emerald-500/40 text-xs font-bold transition border border-emerald-400/30 cursor-pointer"
-                    >
-                      {currentLanguage === 'bn' ? 'আজ' : 'Today'}
-                    </button>
-                  </div>
-                </div>
-                <div className="min-w-0 sm:text-right">
-                  <span className="text-xs text-emerald-200">{t('accounts.totalAvailableCash')}</span>
-                  <div className="break-words text-xl font-black text-emerald-300 sm:text-3xl">
-                    {formatLocalizedCurrency(cashInHand, currentLanguage, useBanglaNumerals)}
-                  </div>
-                </div>
-              </div>
-
-              {/* 4 Summary Metrics */}
-              <div className="grid grid-cols-2 gap-x-3 gap-y-4 border-t border-emerald-700/60 pt-4 text-xs lg:grid-cols-4 lg:gap-3">
-                <div className="min-w-0">
-                  <span className="text-emerald-200/80 block">{t('accounts.metrics.rentCollected')}</span>
-                  <span className="break-words text-sm font-bold text-white sm:text-base">
-                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-emerald-200/80 block">{t('accounts.metrics.rentDue')}</span>
-                  <span className="break-words text-sm font-bold text-red-300 sm:text-base">
-                    {formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-emerald-200/80 block">{t('accounts.metrics.totalExpenses')}</span>
-                  <span className="break-words text-sm font-bold text-amber-300 sm:text-base">
-                    {formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <span className="text-emerald-200/80 block">{t('accounts.metrics.familyPayout')}</span>
-                  <span className="break-words text-sm font-bold text-emerald-200 sm:text-base">
-                    {formatLocalizedCurrency(familyPayoutsTotal, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4 Detail Khata Subsections */}
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
-              {/* 1. ভাড়া আদায় ও রশিদ */}
-              <HyperCard variant="default" className="space-y-3 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-                    <CreditCard className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                    <span>{t('accounts.cards.rentCollection.title')}</span>
-                  </h3>
-                  <button
-                    onClick={() => {
-                      if (!canAccessTab('rent')) return;
-                      setDrillDownView('rent');
-                    }}
-                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    {t('accounts.cards.rentCollection.viewDetail')}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t('accounts.cards.rentCollection.desc')}
-                </p>
-                <div className="p-3 bg-white/70 dark:bg-white/5 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 dark:border-white/10 shadow-2xs">
-                  <span className="text-slate-600 dark:text-slate-300">{t('accounts.cards.rentCollection.currMonthTotal')}</span>
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
-                    {formatLocalizedCurrency(totalRentCollected, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    handleOpenRentDeposit(null);
-                  }}
-                  disabled={!canAccessTab('rent')}
-                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-semibold text-xs shadow-md shadow-emerald-700/20 border border-white/20 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {t('accounts.cards.rentCollection.btn')}
-                </button>
-              </HyperCard>
-
-              {/* 2. রক্ষণাবেক্ষণ ও খরচ */}
-              <HyperCard variant="default" className="space-y-3 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-                    <ReceiptText className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span>{t('accounts.cards.expenses.title')}</span>
-                  </h3>
-                  <button
-                    onClick={() => {
-                      if (!canAccessTab('expenses')) return;
-                      setDrillDownView('expenses');
-                    }}
-                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    {t('accounts.cards.expenses.viewDetail')}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t('accounts.cards.expenses.desc')}
-                </p>
-                <div className="p-3 bg-white/70 dark:bg-white/5 backdrop-blur-xs rounded-2xl flex justify-between items-center text-xs border border-white/80 dark:border-white/10 shadow-2xs">
-                  <span className="text-slate-600 dark:text-slate-300">{t('accounts.cards.expenses.currMonthTotal')}</span>
-                  <span className="font-bold text-amber-700 dark:text-amber-400 text-sm">
-                    {formatLocalizedCurrency(totalExpenses, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleOpenAddExpense()}
-                  disabled={!canAccessTab('expenses')}
-                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold text-xs shadow-md shadow-amber-600/20 border border-white/20 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {t('accounts.cards.expenses.btn')}
-                </button>
-              </HyperCard>
-
-              {/* 3. পারিবারিক বণ্টন ও রিজার্ভ */}
-              <HyperCard variant="default" className="space-y-3 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-                    <Scale className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>{t('accounts.cards.distribution.title')}</span>
-                  </h3>
-                  {canAccessTab('distribution') ? (
-                    <button
-                      onClick={() => setDrillDownView('distribution')}
-                      className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
-                    >
-                      {t('accounts.cards.distribution.viewDetail')}
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-900/40">
-                      {t('accounts.cards.distribution.locked')}
-                    </span>
-                  )}
-                </div>
-
-                {!canAccessTab('distribution') ? (
-                  <div className="p-4 bg-white/60 dark:bg-white/5 backdrop-blur-xs rounded-2xl text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 border border-white/70 dark:border-white/10">
-                    <p className="font-semibold text-slate-700 dark:text-slate-200">{t('accounts.cards.distribution.lockedDesc')}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {t('accounts.cards.distribution.targetDesc')}
-                    </p>
-                    <div className="space-y-1.5 text-xs">
-                      {['Brother 1', 'Brother 2', 'Brother 3'].map((bName) => (
-                        <div
-                          key={bName}
-                          className="flex justify-between items-center p-2 rounded-xl bg-white/70 dark:bg-white/5 backdrop-blur-xs border border-white/80 dark:border-white/10 shadow-2xs"
-                        >
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{bName}</span>
-                          <div className="text-right">
-                            <span className="text-slate-500 dark:text-slate-400 text-[10px]">{t('accounts.cards.distribution.brotherTarget')}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </HyperCard>
-
-              {/* 4. বকেয়া ও হিসাব রিপোর্ট */}
-              <HyperCard variant="default" className="space-y-3 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-                    <BarChart3 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                    <span>{t('accounts.cards.reports.title')}</span>
-                  </h3>
-                  <button
-                    onClick={() => {
-                      if (!canAccessTab('reports')) return;
-                      setDrillDownView('reports');
-                    }}
-                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    {t('accounts.cards.reports.viewDetail')}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t('accounts.cards.reports.desc')}
-                </p>
-                <div className="p-3 bg-red-50/80 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 rounded-2xl flex justify-between items-center text-xs shadow-2xs">
-                  <span className="text-red-900 dark:text-red-300 font-semibold">{t('accounts.cards.reports.totalDue')}</span>
-                  <span className="font-bold text-red-700 dark:text-red-400 text-sm">
-                    {formatLocalizedCurrency(totalRentDue, currentLanguage, useBanglaNumerals)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setDrillDownView('reports')}
-                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white font-semibold text-xs shadow-md shadow-teal-800/20 border border-white/20 transition cursor-pointer"
-                >
-                  {t('accounts.cards.reports.btn')}
-                </button>
-              </HyperCard>
-            </div>
-
-            {/* Active Property Card Overview */}
-            <HyperCard variant="default" className="p-5 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                    <span>{properties[0]?.name || 'ভূঁইয়া বাড়ি'}</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-semibold border border-emerald-200 dark:border-emerald-800/50">
-                      {t('dashboard.activeBuilding')}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('dashboard.propertyDescription')}</p>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setDrillDownView('properties')}
-                    className="px-3.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold text-xs border border-emerald-200 dark:border-emerald-800/40 transition cursor-pointer"
-                  >
-                    {t('dashboard.propertiesAndFlats')}
-                  </button>
-                  <button
-                    onClick={() => setDrillDownView('properties')}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-white/10 transition cursor-pointer"
-                  >
-                    {t('dashboard.manageFlats')}
-                  </button>
-                </div>
-              </div>
-
-              {/* Units summary badge */}
-              <div className="grid grid-cols-3 gap-2 pt-2 text-center text-xs">
-                <div className="p-2.5 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/80 dark:border-white/10 shadow-2xs">
-                  <span className="text-slate-500 dark:text-slate-400 block">{t('dashboard.totalUnits')}</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                    {useBanglaNumerals && currentLanguage === 'bn'
-                      ? (activeUnits.length > 0 ? activeUnits.length : 1).toLocaleString('bn-BD')
-                      : activeUnits.length > 0
-                      ? activeUnits.length
-                      : 1}{' '}
-                    {t('dashboard.unitsCountUnit')}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 shadow-2xs">
-                  <span className="text-emerald-800 dark:text-emerald-300 block">{t('dashboard.occupiedUnits')}</span>
-                  <span className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">
-                    {useBanglaNumerals && currentLanguage === 'bn'
-                      ? (activeTenants.length > 0 ? activeTenants.length : 1).toLocaleString('bn-BD')
-                      : activeTenants.length > 0
-                      ? activeTenants.length
-                      : 1}{' '}
-                    {t('dashboard.unitsCountUnit')}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/80 dark:border-white/10 shadow-2xs">
-                  <span className="text-slate-500 dark:text-slate-400 block">{t('dashboard.vacantUnits')}</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                    {useBanglaNumerals && currentLanguage === 'bn' ? '০' : '0'}{' '}
-                    {t('dashboard.unitsCountUnit')}
-                  </span>
-                </div>
-              </div>
-            </HyperCard>
-
-            {/* Tenant Cards List (Readable Family Cards) */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                    <span>{t('dashboard.tenantsList')}</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('dashboard.tenantsListSubtitle')}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setDrillDownView('tenants')}
-                  className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:underline cursor-pointer"
-                >
-                  {t('dashboard.viewFullTenantList')}
-                </button>
-              </div>
-
-              {activeTenants.length === 0 ? (
-                <div className="p-8 text-center bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-3xl border border-white/80 dark:border-white/10 shadow-sm space-y-2">
-                  <p className="text-slate-500 dark:text-slate-400 font-medium">{t('dashboard.noTenants')}</p>
-                  <button
-                    onClick={() => setTenantModalOpen(true)}
-                    className="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs cursor-pointer"
-                  >
-                    {t('dashboard.addNewTenant')}
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {activeTenants.map((tItem) => {
-                    const status = getTenantMonthStatus(tItem);
-                    const assignedUnit = units.find((u) => u.id === tItem.unitId);
-                    return (
-                      <HyperCard
-                        key={tItem.id}
-                        variant="default"
-                        className="p-4 sm:p-5 flex flex-col justify-between space-y-3"
-                      >
-                        {/* Tenant Top */}
-                        <div className="flex items-start justify-between">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenTenantDetails(tItem)}
-                            className="flex items-center gap-3 text-left group cursor-pointer"
-                          >
-                            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-base group-hover:scale-105 transition shadow-2xs border border-emerald-200 dark:border-emerald-800/50">
-                              <UserRound className="w-5 h-5 text-emerald-800 dark:text-emerald-300" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition">
-                                {tItem.name}
-                              </h4>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                ভবন: ভূঁইয়া বাড়ি •{' '}
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                  {assignedUnit?.unitNumber || 'Flat 1A'}
-                                </span>
-                              </p>
-                            </div>
-                          </button>
-
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-bold shadow-2xs ${
-                              status.isPaid
-                                ? 'bg-emerald-100/90 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50'
-                                : status.isPartial
-                                ? 'bg-amber-100/90 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/50'
-                                : 'bg-red-100/90 dark:bg-red-950/60 text-red-900 dark:text-red-200 border border-red-200 dark:border-red-800/50'
-                            }`}
-                          >
-                            {status.isPaid
-                              ? t('dashboard.statusPaid')
-                              : status.isPartial
-                              ? t('dashboard.statusPartial')
-                              : t('dashboard.statusDue')}
-                          </span>
-                        </div>
-
-                        {/* Rent Breakdown */}
-                        <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-white/60 dark:bg-white/5 backdrop-blur-xs rounded-2xl text-xs border border-white/70 dark:border-white/10">
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.monthlyRentLabel')}</span>
-                            <span className="font-bold text-slate-800 dark:text-slate-200">
-                              {formatLocalizedCurrency(tItem.monthlyRent, currentLanguage, useBanglaNumerals)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.rentCollected')}</span>
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                              {formatLocalizedCurrency(status.paid, currentLanguage, useBanglaNumerals)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{t('dashboard.rentRemaining')}</span>
-                            <span className="font-bold text-red-600 dark:text-red-400">
-                              {formatLocalizedCurrency(status.due, currentLanguage, useBanglaNumerals)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Action row */}
-                        <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-100 dark:border-white/10">
-                          <span className="text-slate-400">
-                            {t('dashboard.mobileLabel')} {tItem.mobile || t('dashboard.notProvided')}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenPaymentForTenant(tItem.id);
-                            }}
-                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition shadow-2xs cursor-pointer"
-                          >
-                            {t('dashboard.collectRentAction')}
-                          </button>
-                        </div>
-                      </HyperCard>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Recent Activity Feed */}
-            <div className="bg-white dark:bg-[#1c1c1f] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xs space-y-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                <span>{t('dashboard.recentActivity')}</span>
-              </h3>
-
-              {selectedMonthPayments.length === 0 && selectedMonthExpenses.length === 0 ? (
-                <p className="text-xs text-slate-400 py-4 text-center">
-                  {t('dashboard.emptyActivity')}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedMonthPayments.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex justify-between items-center p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-emerald-200/70 dark:bg-emerald-800/50 text-emerald-900 dark:text-emerald-100 flex items-center justify-center font-bold">
-                          <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-900 dark:text-emerald-100" />
-                        </span>
-                        <div>
-                          <div className="font-bold text-slate-800 dark:text-slate-100">{t('dashboard.rentCollectedActivity')}</div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                            {t('dashboard.receipt')} {p.receiptNumber || p.id.slice(0, 8)} ({p.paymentMethod})
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">
-                          +{formatLocalizedCurrency(p.amount, currentLanguage, useBanglaNumerals)}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {p.paymentDate?.toDate?.()?.toLocaleDateString() || String(p.billingMonth)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {selectedMonthExpenses.map((e) => (
-                    <div
-                      key={e.id}
-                      className="flex justify-between items-center p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800/40 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-amber-200/70 dark:bg-amber-800/50 text-amber-900 dark:text-amber-100 flex items-center justify-center font-bold">
-                          <ArrowUpRight className="w-3.5 h-3.5 text-amber-900 dark:text-amber-100" />
-                        </span>
-                        <div>
-                          <div className="font-bold text-slate-800 dark:text-slate-100">{e.title}</div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('dashboard.category')} {e.category}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-amber-800 dark:text-amber-300 text-sm">
-                          -{formatLocalizedCurrency(e.amount, currentLanguage, useBanglaNumerals)}
-                        </div>
-                        <div className="text-[10px] text-slate-400">{e.expenseDate}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        {isHisabDashboard && (
+          <HisabDashboard
+            ownerUid={currentOwnerUid}
+            properties={properties}
+            units={units}
+            tenants={tenants}
+            bills={bills}
+            payments={payments}
+            expenses={expenses}
+            activeTab={hisabTab}
+            onTabChange={(tab) => setDrillDownView(tab)}
+            canCollectRent={canAccessTab('rent')}
+            canRecordExpenses={canAccessTab('expenses')}
+            canAccessTab={canAccessTab}
+            onOpenRentDeposit={handleOpenRentDeposit}
+            onOpenAddExpense={handleOpenAddExpense}
+            onOpenTenantDetails={handleOpenTenantDetails}
+            onCreateTenant={() => setTenantModalOpen(true)}
+            onOpenPropertyManagement={() => setDrillDownView('properties')}
+            onOpenTenantManagement={() => setDrillDownView('tenants')}
+          />
         )}
 
         {/* --------------------------------------------------------------------- */}
@@ -1492,6 +1049,44 @@ export default function AdminDashboard() {
                   </div>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
+              </HyperCard>
+            )}
+
+            {/* 2b. Master Admin Control Center (database, audit, archive) */}
+            {isMasterAdmin && (
+              <HyperCard
+                variant="default"
+                clickable
+                data-admin-control-trigger="true"
+                onClick={() => navigateTo('admin-control')}
+                className="p-5 sm:p-6 cursor-pointer border border-[#7655E8]/30 bg-[#7655E8]/[0.05] hover:bg-[#7655E8]/[0.10] transition-all select-none group"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <div className="w-12 h-12 rounded-[16px] bg-[rgba(118,85,232,0.12)] text-[#7655E8] flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <ShieldCheck className="w-6 h-6" strokeWidth={2.2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm sm:text-base text-[var(--hyper-text-primary)] leading-tight">
+                          {isBn ? 'মাস্টার কন্ট্রোল সেন্টার' : 'Master Control Center'}
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#7655E8]/15 text-[#7655E8]">
+                          {isBn ? 'অ্যাডভান্সড' : 'Advanced'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--hyper-text-secondary)] mt-1">
+                        {isBn
+                          ? 'সব ডেটা রেকর্ড খুঁজুন, সম্পাদনা করুন, অডিট লগ দেখুন এবং আর্কাইভ পুনরুদ্ধার করুন'
+                          : 'Search and edit every record, review audit logs, and restore archives'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[#7655E8] font-bold text-xs shrink-0">
+                    <span className="hidden sm:inline">{isBn ? 'খুলুন' : 'Open'}</span>
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
               </HyperCard>
             )}
 

@@ -148,7 +148,20 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 7. CLOUD STORAGE & SYSTEM INTEGRATIONS
+    // 7. IMMUTABLE ADMIN AUDIT TRAIL (backend-written, Master Admin readable)
+    // =========================================================================
+
+    match /audit_logs/{logId} {
+      allow read: if isAuthenticated() &&
+                     'workspaceId' in resource.data &&
+                     isMasterAdmin(resource.data.workspaceId);
+      // Audit rows are append-only from the trusted backend; clients can never
+      // create, edit, or delete them.
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 8. CLOUD STORAGE & SYSTEM INTEGRATIONS
     // =========================================================================
 
     // File metadata records (read allowed for authorized workspace readers; writes only via backend API)

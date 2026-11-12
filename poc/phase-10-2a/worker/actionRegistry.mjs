@@ -44,6 +44,237 @@ function validateMonth(payload, fieldName = 'billingMonth') {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared helpers for live (non-packaging) administrative actions
+// ---------------------------------------------------------------------------
+
+const ALLOWED_UNIT_TYPES = new Set([
+  'flat', 'shop', 'room', 'office', 'warehouse', 'other', 'commercial', 'garage',
+]);
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function fail(code, message, status = 400) {
+  const err = new Error(message);
+  err.code = code;
+  err.status = status;
+  return err;
+}
+
+function newDocumentId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function optionalString(value, fieldName, maxLength = 500) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') {
+    throw fail('INVALID_ARGUMENT', `Field "${fieldName}" must be a string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw fail('INVALID_ARGUMENT', `Field "${fieldName}" exceeds ${maxLength} characters`);
+  }
+  return trimmed;
+}
+
+function finiteNumber(value, fieldName, { min = -Infinity, max = Infinity } = {}) {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) {
+    throw fail('INVALID_ARGUMENT', `Field "${fieldName}" must be a valid number`);
+  }
+  if (num < min || num > max) {
+    throw fail('INVALID_ARGUMENT', `Field "${fieldName}" is out of the allowed range`);
+  }
+  return num;
+}
+
+/**
+ * Every administrative write must target a record that belongs to the caller's
+ * authorized workspace (or, for legacy documents, the caller's own ownerUid).
+ */
+function assertResourceAccess(ctx, data, label = 'Record') {
+  if (!data) throw fail('NOT_FOUND', `${label} not found.`, 404);
+  const workspaceId = ctx.authContext.workspaceId;
+  if (data.workspaceId && data.workspaceId !== workspaceId) {
+    throw fail('PERMISSION_DENIED', 'Record belongs to another workspace.', 403);
+  }
+  if (!data.workspaceId && data.ownerUid && data.ownerUid !== ctx.authContext.uid) {
+    throw fail('PERMISSION_DENIED', 'Unauthorized record access.', 403);
+  }
+}
+
+function normalizedUnitKey(unitNumber) {
+  return String(unitNumber).trim().toLowerCase().replace(/[\s\-_/.,#]+/g, '');
+}
+
+function parseUnitNumber(raw) {
+  const trimmed = optionalString(raw, 'unitNumber', 50);
+  if (!trimmed) throw fail('INVALID_ARGUMENT', 'Field "unitNumber" is required');
+  const normalized = normalizedUnitKey(trimmed);
+  if (!/^[a-z0-9]{1,32}$/.test(normalized)) {
+    throw fail('INVALID_ARGUMENT', 'Unit number must normalize to 1-32 alphanumeric characters.');
+  }
+  return { trimmed, normalized };
+}
+
+function readUnitMap(raw) {
+  const out = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string' && value) out[String(key).toLowerCase()] = value;
+    }
+  }
+  return out;
+}
+
+const AUDIT_ENTITY_BY_ACTION = {
+  createPropertyCallable: ['property', 'propertyId'],
+  updatePropertyCallable: ['property', 'propertyId'],
+  archivePropertyCallable: ['property', 'propertyId'],
+  deletePropertyCallable: ['property', 'propertyId'],
+  createUnitCallable: ['unit', 'unitId'],
+  renameUnitCallable: ['unit', 'unitId'],
+  updateUnitCallable: ['unit', 'unitId'],
+  archiveUnitCallable: ['unit', 'unitId'],
+  restoreUnitCallable: ['unit', 'unitId'],
+  deleteUnitCallable: ['unit', 'unitId'],
+  registerTenantCallable: ['tenant', 'tenantId'],
+  updateTenantCallable: ['tenant', 'tenantId'],
+  vacateTenantCallable: ['tenant', 'tenantId'],
+  generateMonthlyBillsCallable: ['rent_bill', 'billingMonth'],
+  recordRentPaymentCallable: ['rent_payment', 'billId'],
+  createExpenseCallable: ['expense', 'expenseId'],
+  updateExpenseCallable: ['expense', 'expenseId'],
+  reverseExpenseCallable: ['expense', 'expenseId'],
+  seedDefaultBeneficiariesCallable: ['beneficiary', 'workspaceId'],
+  createBeneficiaryCallable: ['beneficiary', 'beneficiaryId'],
+  updateBeneficiaryCallable: ['beneficiary', 'beneficiaryId'],
+  archiveBeneficiaryCallable: ['beneficiary', 'beneficiaryId'],
+  getOrCreateMonthlyDistributionCallable: ['family_distribution', 'distributionMonth'],
+  applySpecialAdjustmentCallable: ['family_distribution', 'distributionId'],
+  recordBeneficiaryPayoutCallable: ['family_distribution', 'distributionId'],
+  initializeReserveFundCallable: ['reserve_fund', 'workspaceId'],
+  withdrawFromReserveCallable: ['reserve_fund', 'workspaceId'],
+  transferSurplusToReserveCallable: ['reserve_fund', 'workspaceId'],
+  reverseRentPaymentCallable: ['rent_payment', 'paymentId'],
+  cancelRentBillCallable: ['rent_bill', 'billId'],
+  refundSecurityDepositCallable: ['security_deposit', 'depositId'],
+  restoreBeneficiaryCallable: ['beneficiary', 'beneficiaryId'],
+  getBeneficiaryHistoryCallable: ['beneficiary', 'beneficiaryId'],
+  createWorkspaceMemberCallable: ['workspace_member', 'email'],
+  updateWorkspaceMemberPermissionsCallable: ['workspace_member', 'targetUid'],
+  updateWorkspaceMemberStatusCallable: ['workspace_member', 'targetUid'],
+  sendWorkspaceMemberPasswordResetCallable: ['workspace_member', 'email'],
+  inviteFamilyMemberCallable: ['workspace_member', 'email'],
+  updateMemberPermissionsCallable: ['workspace_member', 'targetUid'],
+  deactivateFamilyMemberCallable: ['workspace_member', 'targetUid'],
+};
+
+const AUDIT_COLLECTION_BY_ENTITY = {
+  property: 'properties',
+  unit: 'units',
+  tenant: 'tenants',
+  rent_bill: 'rent_bills',
+  rent_payment: 'rent_payments',
+  expense: 'expenses',
+  beneficiary: 'beneficiaries',
+  family_distribution: 'family_distributions',
+  reserve_fund: 'reserve_funds',
+  security_deposit: 'security_deposits',
+  workspace_member: 'workspace_members',
+};
+
+const REDACTED_AUDIT_KEYS = new Set([
+  'password', 'initialpassword', 'token', 'idtoken', 'refreshtoken',
+  'privatekey', 'serviceaccount', 'apikey', 'authorization',
+]);
+
+function sanitizeAuditPayload(payload) {
+  const safe = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(payload || {})) {
+    if (count >= 40) break;
+    count += 1;
+    const lowerKey = key.toLowerCase();
+    if (REDACTED_AUDIT_KEYS.has(lowerKey)) {
+      safe[key] = '[REDACTED]';
+    } else if (value === null || value === undefined) {
+      safe[key] = null;
+    } else if (typeof value === 'string') {
+      safe[key] = value.length > 300 ? `${value.slice(0, 300)}…` : value;
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      safe[key] = value;
+    } else if (Array.isArray(value)) {
+      safe[key] = value.slice(0, 10);
+    } else {
+      safe[key] = '[object]';
+    }
+  }
+  return safe;
+}
+
+function operationFromAction(actionName) {
+  const match = /^(create|update|archive|restore|rename|delete|vacate|reverse|record|generate|seed|apply|withdraw|transfer|initialize|invite|deactivate|send|get|list)/i
+    .exec(actionName);
+  return match ? match[1].toLowerCase() : 'execute';
+}
+
+async function readAuditTarget(ctx, actionName, payload) {
+  const mapping = AUDIT_ENTITY_BY_ACTION[actionName];
+  if (!mapping || !ctx?.firestore) return null;
+  const [entityType, idField] = mapping;
+  const collection = AUDIT_COLLECTION_BY_ENTITY[entityType];
+  const documentId = payload?.[idField];
+  if (!collection || typeof documentId !== 'string' || !documentId) return null;
+  try {
+    const existing = await ctx.firestore.getDocument(collection, documentId);
+    return existing?.data || null;
+  } catch (error) {
+    console.warn(`[Audit] Could not read previous values for ${actionName}:`, error?.message || error);
+    return null;
+  }
+}
+
+/**
+ * Best-effort immutable audit trail. The business transaction commits first;
+ * an audit write failure is logged but never hides a successful mutation.
+ * Read-only list actions are intentionally excluded.
+ */
+async function recordAuditLog(ctx, actionName, payload, outcome, previousValues = null) {
+  if (!ctx || !ctx.firestore || ctx.config?.disableFinancialWrites) return;
+  const mapping = AUDIT_ENTITY_BY_ACTION[actionName];
+  if (!mapping) return;
+  const [entityType, idField] = mapping;
+  const result = outcome?.result || {};
+  const documentId =
+    (typeof result?.[idField] === 'string' && result[idField]) ||
+    (typeof payload?.[idField] === 'string' && payload[idField]) ||
+    '';
+  const auditId = newDocumentId('audit');
+  const record = {
+    workspaceId: ctx.authContext.workspaceId,
+    actorUid: ctx.authContext.uid,
+    actorEmail: ctx.verifiedUser?.email || '',
+    action: actionName,
+    operation: operationFromAction(actionName),
+    entityType,
+    documentId,
+    status: outcome?.status || 'unknown',
+    errorCode: outcome?.errorCode || null,
+    previousValues: previousValues ? sanitizeAuditPayload(previousValues) : null,
+    updatedValues: sanitizeAuditPayload(payload),
+    reason: typeof payload?.reason === 'string' ? payload.reason.slice(0, 500) : null,
+    relatedTransactionId: typeof result?.transactionId === 'string' ? result.transactionId : null,
+    source: 'cloudflare-worker',
+    createdAt: new Date(),
+  };
+  try {
+    await ctx.firestore.createDocument('audit_logs', auditId, record);
+  } catch (auditError) {
+    console.warn(`[Audit] Failed to persist audit record for ${actionName}:`, auditError?.message || auditError);
+  }
+}
+
+
 /**
  * Normalizes client payloads to bridge frontend/backend DTO divergences safely
  */
@@ -78,6 +309,10 @@ export function normalizeActionPayload(actionName, rawPayload) {
       if (p.refundAmount === undefined) p.refundAmount = 0;
       break;
 
+    case 'updateTenantCallable':
+      p.mobile = p.mobile || p.phone;
+      break;
+
     case 'generateMonthlyBillsCallable':
       if (!p.propertyId) p.propertyId = 'all';
       break;
@@ -109,6 +344,15 @@ export function normalizeActionPayload(actionName, rawPayload) {
 
     case 'transferSurplusToReserveCallable':
       p.fromBillingMonth = p.fromBillingMonth || p.distributionMonth || p.month;
+      break;
+    case 'reverseRentPaymentCallable':
+      p.paymentId = p.paymentId || p.rentPaymentId;
+      break;
+    case 'cancelRentBillCallable':
+      p.billId = p.billId || p.rentBillId;
+      break;
+    case 'refundSecurityDepositCallable':
+      p.depositId = p.depositId || p.securityDepositId;
       break;
 
     case 'getOrCreateMonthlyDistributionCallable':
@@ -262,6 +506,41 @@ export const ACTION_REGISTRY = {
     }
   },
 
+  'deletePropertyCallable': {
+    permission: ACTION_PERMISSIONS['deletePropertyCallable'],
+    validate: (p) => validateRequired(p, 'propertyId'),
+    execute: async (ctx, payload) => {
+      if (ctx.config.disableFinancialWrites) {
+        return { success: true, action: 'deletePropertyCallable', status: 'PACKAGING_VALIDATED', propertyId: payload.propertyId };
+      }
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const property = await ctx.firestore.getDocument('properties', String(payload.propertyId));
+      assertResourceAccess(ctx, property?.data, 'Property');
+      if (!property.data.isArchived) {
+        throw fail('FAILED_PRECONDITION', 'Archive the property before permanently deleting it.', 412);
+      }
+      const bills = await ctx.firestore.queryByField('rent_bills', 'propertyId', 'EQUAL', String(payload.propertyId));
+      if (bills.length > 0) {
+        throw fail('FAILED_PRECONDITION', 'Cannot permanently delete a property that has billing history.', 412);
+      }
+      const tenants = await ctx.firestore.queryByField('tenants', 'propertyId', 'EQUAL', String(payload.propertyId));
+      if (tenants.length > 0) {
+        throw fail('FAILED_PRECONDITION', 'Cannot permanently delete a property that has tenant history. Archive it instead.', 412);
+      }
+      const units = await ctx.firestore.queryByField('units', 'propertyId', 'EQUAL', String(payload.propertyId));
+      if (units.some((unit) => !unit.data.isArchived)) {
+        throw fail('FAILED_PRECONDITION', 'Archive every unit before permanently deleting the property.', 412);
+      }
+      return await ctx.firestore.runTransaction(async (tx) => {
+        for (const unit of units) {
+          tx.delete('units', unit.id);
+        }
+        tx.delete('properties', payload.propertyId);
+        return { success: true, action: 'deletePropertyCallable', propertyId: payload.propertyId, deletedUnits: units.length };
+      });
+    }
+  },
+
   // ===========================================================================
   // GROUP 1: UNITS & PROPERTY LIFECYCLE (4 Actions)
   // ===========================================================================
@@ -275,7 +554,58 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'createUnitCallable', status: 'PACKAGING_VALIDATED', unitId: `mock_${Date.now()}` };
       }
-      throw new Error('Live execution not configured in packaging phase');
+      const propertyId = String(payload.propertyId);
+      const { trimmed: unitNumber, normalized } = parseUnitNumber(payload.unitNumber);
+      const type = payload.type || 'flat';
+      if (!ALLOWED_UNIT_TYPES.has(type)) {
+        throw fail('INVALID_ARGUMENT', `Invalid unit type "${type}".`);
+      }
+      const floor = finiteNumber(payload.floor ?? 1, 'floor', { min: -10, max: 200 });
+      const monthlyRent = finiteNumber(payload.monthlyRent ?? 0, 'monthlyRent', { min: 0, max: 100000000 });
+      const serviceCharge = finiteNumber(payload.serviceCharge ?? 0, 'serviceCharge', { min: 0, max: 10000000 });
+      const notes = optionalString(payload.notes, 'notes', 1000);
+      const electricityMeterNumber = optionalString(payload.electricityMeterNumber, 'electricityMeterNumber', 64);
+      const gasMeterNumber = optionalString(payload.gasMeterNumber, 'gasMeterNumber', 64);
+
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        if (property.data.isArchived) {
+          throw fail('FAILED_PRECONDITION', 'Cannot add units to an archived property.', 412);
+        }
+        const activeMap = readUnitMap(property.data.activeUnitNumbers);
+        if (activeMap[normalized]) {
+          throw fail('ALREADY_EXISTS', `Unit "${unitNumber}" already exists in this property.`, 409);
+        }
+        const unitId = payload.unitId || newDocumentId('unit');
+        tx.create('units', unitId, {
+          propertyId,
+          unitNumber,
+          normalizedUnitNumber: normalized,
+          type,
+          floor,
+          monthlyRent,
+          serviceCharge,
+          status: 'vacant',
+          currentTenantId: null,
+          electricityMeterNumber,
+          gasMeterNumber,
+          notes,
+          isArchived: false,
+          workspaceId: ctx.authContext.workspaceId,
+          ownerUid: ctx.authContext.uid,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        activeMap[normalized] = unitId;
+        tx.update('properties', propertyId, {
+          activeUnitNumbers: activeMap,
+          updatedAt: new Date(),
+        });
+        return { success: true, action: 'createUnitCallable', unitId, normalizedUnitNumber: normalized };
+      });
     }
   },
   'renameUnitCallable': {
@@ -288,7 +618,87 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'renameUnitCallable', status: 'PACKAGING_VALIDATED', unitId: payload.unitId };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const { trimmed: newUnitNumber, normalized } = parseUnitNumber(payload.newUnitNumber);
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const unit = await tx.get('units', payload.unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        const propertyId = payload.propertyId || unit.data.propertyId;
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        if (unit.data.propertyId !== propertyId) {
+          throw fail('INVALID_ARGUMENT', 'Unit does not belong to the specified property.');
+        }
+        if (!unit.data.isArchived) {
+          const activeMap = readUnitMap(property.data.activeUnitNumbers);
+          const previousNormalized = unit.data.normalizedUnitNumber || normalizedUnitKey(unit.data.unitNumber || '');
+          if (activeMap[normalized] && activeMap[normalized] !== payload.unitId) {
+            throw fail('ALREADY_EXISTS', `Unit "${newUnitNumber}" already exists in this property.`, 409);
+          }
+          if (previousNormalized && previousNormalized !== normalized) {
+            delete activeMap[previousNormalized];
+            activeMap[normalized] = payload.unitId;
+            tx.update('properties', propertyId, { activeUnitNumbers: activeMap, updatedAt: new Date() });
+          }
+        }
+        tx.update('units', payload.unitId, {
+          unitNumber: newUnitNumber,
+          normalizedUnitNumber: normalized,
+          updatedAt: new Date(),
+        });
+        return { success: true, action: 'renameUnitCallable', unitId: payload.unitId, normalizedUnitNumber: normalized };
+      });
+    }
+  },
+  'updateUnitCallable': {
+    permission: ACTION_PERMISSIONS['updateUnitCallable'],
+    validate: (p) => validateRequired(p, 'unitId'),
+    execute: async (ctx, payload) => {
+      if (ctx.config.disableFinancialWrites) {
+        return { success: true, action: 'updateUnitCallable', status: 'PACKAGING_VALIDATED', unitId: payload.unitId };
+      }
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const updates = { updatedAt: new Date() };
+      if (payload.unitNumber !== undefined) {
+        const parsed = parseUnitNumber(payload.unitNumber);
+        updates.unitNumber = parsed.trimmed;
+        updates.normalizedUnitNumber = parsed.normalized;
+      }
+      if (payload.type !== undefined) {
+        if (!ALLOWED_UNIT_TYPES.has(payload.type)) throw fail('INVALID_ARGUMENT', `Invalid unit type "${payload.type}".`);
+        updates.type = payload.type;
+      }
+      if (payload.floor !== undefined) updates.floor = finiteNumber(payload.floor, 'floor', { min: -10, max: 200 });
+      if (payload.monthlyRent !== undefined) updates.monthlyRent = finiteNumber(payload.monthlyRent, 'monthlyRent', { min: 0, max: 100000000 });
+      if (payload.serviceCharge !== undefined) updates.serviceCharge = finiteNumber(payload.serviceCharge, 'serviceCharge', { min: 0, max: 10000000 });
+      if (payload.notes !== undefined) updates.notes = optionalString(payload.notes, 'notes', 1000);
+      if (payload.electricityMeterNumber !== undefined) updates.electricityMeterNumber = optionalString(payload.electricityMeterNumber, 'electricityMeterNumber', 64);
+      if (payload.gasMeterNumber !== undefined) updates.gasMeterNumber = optionalString(payload.gasMeterNumber, 'gasMeterNumber', 64);
+
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const unit = await tx.get('units', payload.unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        const propertyId = payload.propertyId || unit.data.propertyId;
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        if (unit.data.propertyId !== propertyId) {
+          throw fail('INVALID_ARGUMENT', 'Unit does not belong to the specified property.');
+        }
+        if (updates.normalizedUnitNumber && updates.normalizedUnitNumber !== unit.data.normalizedUnitNumber) {
+          if (!unit.data.isArchived) {
+            const activeMap = readUnitMap(property.data.activeUnitNumbers);
+            if (activeMap[updates.normalizedUnitNumber] && activeMap[updates.normalizedUnitNumber] !== payload.unitId) {
+              throw fail('ALREADY_EXISTS', `Unit "${updates.unitNumber}" already exists in this property.`, 409);
+            }
+            const previousNormalized = unit.data.normalizedUnitNumber || normalizedUnitKey(unit.data.unitNumber || '');
+            if (previousNormalized) delete activeMap[previousNormalized];
+            activeMap[updates.normalizedUnitNumber] = payload.unitId;
+            tx.update('properties', propertyId, { activeUnitNumbers: activeMap, updatedAt: new Date() });
+          }
+        }
+        tx.update('units', payload.unitId, updates);
+        return { success: true, action: 'updateUnitCallable', unitId: payload.unitId };
+      });
     }
   },
   'archiveUnitCallable': {
@@ -298,7 +708,23 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'archiveUnitCallable', status: 'PACKAGING_VALIDATED', unitId: payload.unitId, isArchived: true };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const unit = await tx.get('units', payload.unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        if (unit.data.status === 'occupied' || unit.data.currentTenantId) {
+          throw fail('FAILED_PRECONDITION', 'Vacate the active tenant before archiving this unit.', 412);
+        }
+        const propertyId = payload.propertyId || unit.data.propertyId;
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        const activeMap = readUnitMap(property.data.activeUnitNumbers);
+        const normalized = unit.data.normalizedUnitNumber || normalizedUnitKey(unit.data.unitNumber || '');
+        if (activeMap[normalized] === payload.unitId) delete activeMap[normalized];
+        tx.update('properties', propertyId, { activeUnitNumbers: activeMap, updatedAt: new Date() });
+        tx.update('units', payload.unitId, { isArchived: true, status: 'archived', updatedAt: new Date() });
+        return { success: true, action: 'archiveUnitCallable', unitId: payload.unitId, isArchived: true };
+      });
     }
   },
   'restoreUnitCallable': {
@@ -308,9 +734,60 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'restoreUnitCallable', status: 'PACKAGING_VALIDATED', unitId: payload.unitId, isArchived: false };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const unit = await tx.get('units', payload.unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        const propertyId = payload.propertyId || unit.data.propertyId;
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        const activeMap = readUnitMap(property.data.activeUnitNumbers);
+        const normalized = unit.data.normalizedUnitNumber || normalizedUnitKey(unit.data.unitNumber || '');
+        if (activeMap[normalized] && activeMap[normalized] !== payload.unitId) {
+          throw fail('ALREADY_EXISTS', `Cannot restore: "${unit.data.unitNumber}" is used by another active unit.`, 409);
+        }
+        activeMap[normalized] = payload.unitId;
+        tx.update('properties', propertyId, { activeUnitNumbers: activeMap, updatedAt: new Date() });
+        tx.update('units', payload.unitId, { isArchived: false, status: 'vacant', updatedAt: new Date() });
+        return { success: true, action: 'restoreUnitCallable', unitId: payload.unitId, isArchived: false };
+      });
     }
   },
+  'deleteUnitCallable': {
+    permission: ACTION_PERMISSIONS['deleteUnitCallable'],
+    validate: (p) => validateRequired(p, 'unitId'),
+    execute: async (ctx, payload) => {
+      if (ctx.config.disableFinancialWrites) {
+        return { success: true, action: 'deleteUnitCallable', status: 'PACKAGING_VALIDATED', unitId: payload.unitId };
+      }
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const bills = await ctx.firestore.queryByField('rent_bills', 'unitId', 'EQUAL', String(payload.unitId));
+      if (bills.length > 0) {
+        throw fail('FAILED_PRECONDITION', 'Cannot permanently delete a unit that has billing history. Archive it instead.', 412);
+      }
+      const tenants = await ctx.firestore.queryByField('tenants', 'unitId', 'EQUAL', String(payload.unitId));
+      if (tenants.length > 0) {
+        throw fail('FAILED_PRECONDITION', 'Cannot permanently delete a unit with tenant history. Archive it instead.', 412);
+      }
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const unit = await tx.get('units', payload.unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        if (!unit.data.isArchived) {
+          throw fail('FAILED_PRECONDITION', 'Archive the unit before permanently deleting it.', 412);
+        }
+        const propertyId = payload.propertyId || unit.data.propertyId;
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        const activeMap = readUnitMap(property.data.activeUnitNumbers);
+        const normalized = unit.data.normalizedUnitNumber || normalizedUnitKey(unit.data.unitNumber || '');
+        delete activeMap[normalized];
+        tx.update('properties', propertyId, { activeUnitNumbers: activeMap, updatedAt: new Date() });
+        tx.delete('units', payload.unitId);
+        return { success: true, action: 'deleteUnitCallable', unitId: payload.unitId };
+      });
+    }
+  },
+
 
   // ===========================================================================
   // GROUP 2: TENANTS & LEASES (2 Actions)
@@ -329,58 +806,124 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'registerTenantCallable', status: 'PACKAGING_VALIDATED', tenantId: `mock_t_${Date.now()}` };
       }
-      if (!ctx.config.disableFinancialWrites && ctx.firestore) {
-        const workspaceId = ctx.authContext.workspaceId;
-        const tenantId = payload.tenantId || `tenant_${Date.now()}`;
-        const tenantPath = 'tenants';
-        const liabilityPath = 'security_deposits';
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const workspaceId = ctx.authContext.workspaceId;
+      const propertyId = String(payload.propertyId);
+      const unitId = String(payload.unitId);
+      const name = optionalString(payload.name, 'name', 100);
+      const mobile = optionalString(payload.mobile || payload.phone, 'mobile', 30);
+      if (!name || !mobile) throw fail('INVALID_ARGUMENT', 'Tenant name and mobile are required.');
+      const monthlyRent = finiteNumber(payload.monthlyRent, 'monthlyRent', { min: 0, max: 100000000 });
+      const gasCharge = finiteNumber(payload.gasCharge ?? 0, 'gasCharge', { min: 0, max: 10000000 });
+      const waterCharge = finiteNumber(payload.waterCharge ?? 0, 'waterCharge', { min: 0, max: 10000000 });
+      const advanceDeposit = finiteNumber(payload.securityDeposit ?? payload.advanceDeposit ?? 0, 'advanceDeposit', { min: 0, max: 100000000 });
+      const moveInDate = optionalString(payload.moveInDate, 'moveInDate', 30) || new Date().toISOString().slice(0, 10);
 
-        return await ctx.firestore.runTransaction(async (tx) => {
-          tx.create(tenantPath, tenantId, {
-            propertyId: payload.propertyId,
-            unitId: payload.unitId,
-            name: payload.name,
-            phone: payload.phone,
-            mobile: payload.phone,
-            monthlyRent: payload.monthlyRent,
-            securityDeposit: payload.securityDeposit,
-            advanceDeposit: payload.securityDeposit,
-            status: 'active',
-            workspaceId,
-            ownerUid: payload.ownerUid || ctx.authContext.uid,
-            createdAt: new Date()
-          });
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const property = await tx.get('properties', propertyId);
+        assertResourceAccess(ctx, property?.data, 'Property');
+        if (property.data.isArchived) throw fail('FAILED_PRECONDITION', 'Cannot assign tenants to an archived property.', 412);
+        const unit = await tx.get('units', unitId);
+        assertResourceAccess(ctx, unit?.data, 'Unit');
+        if (unit.data.propertyId !== propertyId) throw fail('INVALID_ARGUMENT', 'Unit does not belong to the specified property.');
+        if (unit.data.isArchived) throw fail('FAILED_PRECONDITION', 'Cannot assign tenants to an archived unit.', 412);
+        if (unit.data.status !== 'vacant' || unit.data.currentTenantId) {
+          throw fail('FAILED_PRECONDITION', `Unit is not vacant (status: ${unit.data.status}).`, 412);
+        }
 
-          // Record Security Deposit strictly as liability, NOT rental income
-          if (payload.securityDeposit > 0) {
-            tx.create(liabilityPath, `deposit_${tenantId}`, {
-              tenantId,
-              propertyId: payload.propertyId,
-              unitId: payload.unitId,
-              amount: payload.securityDeposit,
-              depositAmount: payload.securityDeposit,
-              type: 'security_deposit',
-              classification: 'liability',
-              isLiability: true,
-              isRentalIncome: false,
-              status: 'held',
-              workspaceId,
-              ownerUid: payload.ownerUid || ctx.authContext.uid,
-              createdAt: new Date()
-            });
-          }
-
-          return {
-            success: true,
-            action: 'registerTenantCallable',
-            tenantId,
-            securityDeposit: payload.securityDeposit,
-            isLiability: true,
-            isRentalIncome: false
-          };
+        const tenantId = payload.tenantId || newDocumentId('tenant');
+        tx.create('tenants', tenantId, {
+          propertyId,
+          unitId,
+          name,
+          mobile,
+          phone: mobile,
+          nid: optionalString(payload.nid, 'nid', 30),
+          address: optionalString(payload.address, 'address', 300),
+          monthlyRent,
+          gasCharge,
+          waterCharge,
+          advanceDeposit,
+          securityDeposit: advanceDeposit,
+          moveInDate,
+          notes: optionalString(payload.notes, 'notes', 1000),
+          status: 'active',
+          isArchived: false,
+          vacatingDate: null,
+          workspaceId,
+          ownerUid: ctx.authContext.uid,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
+        tx.update('units', unitId, {
+          status: 'occupied',
+          currentTenantId: tenantId,
+          monthlyRent,
+          updatedAt: new Date(),
+        });
+
+        let depositId = null;
+        if (advanceDeposit > 0) {
+          depositId = `deposit_${tenantId}`;
+          tx.create('security_deposits', depositId, {
+            propertyId,
+            unitId,
+            tenantId,
+            depositAmount: advanceDeposit,
+            receivedDate: new Date(),
+            status: 'held',
+            refundedAmount: 0,
+            damageDeductionAmount: 0,
+            settlementDate: null,
+            classification: 'liability',
+            isLiability: true,
+            isRentalIncome: false,
+            notes: `Security deposit received on tenant registration (${name})`,
+            workspaceId,
+            ownerUid: ctx.authContext.uid,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+
+        return { success: true, action: 'registerTenantCallable', tenantId, depositId };
+      });
+    }
+  },
+  'updateTenantCallable': {
+    permission: ACTION_PERMISSIONS['updateTenantCallable'],
+    validate: (p) => validateRequired(p, 'tenantId'),
+    execute: async (ctx, payload) => {
+      if (ctx.config.disableFinancialWrites) {
+        return { success: true, action: 'updateTenantCallable', status: 'PACKAGING_VALIDATED', tenantId: payload.tenantId };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const updates = { updatedAt: new Date() };
+      if (payload.name !== undefined) {
+        const name = optionalString(payload.name, 'name', 100);
+        if (!name) throw fail('INVALID_ARGUMENT', 'Tenant name cannot be empty.');
+        updates.name = name;
+      }
+      if (payload.mobile !== undefined) {
+        const mobile = optionalString(payload.mobile, 'mobile', 30);
+        if (!mobile) throw fail('INVALID_ARGUMENT', 'Tenant mobile cannot be empty.');
+        updates.mobile = mobile;
+        updates.phone = mobile;
+      }
+      if (payload.nid !== undefined) updates.nid = optionalString(payload.nid, 'nid', 30);
+      if (payload.address !== undefined) updates.address = optionalString(payload.address, 'address', 300);
+      if (payload.notes !== undefined) updates.notes = optionalString(payload.notes, 'notes', 1000);
+      if (payload.moveInDate !== undefined) {
+        const moveInDate = optionalString(payload.moveInDate, 'moveInDate', 30);
+        if (moveInDate && !DATE_ONLY_REGEX.test(moveInDate)) throw fail('INVALID_ARGUMENT', 'moveInDate must be YYYY-MM-DD.');
+        updates.moveInDate = moveInDate;
+      }
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const tenant = await tx.get('tenants', payload.tenantId);
+        assertResourceAccess(ctx, tenant?.data, 'Tenant');
+        tx.update('tenants', payload.tenantId, updates);
+        return { success: true, action: 'updateTenantCallable', tenantId: payload.tenantId };
+      });
     }
   },
   'vacateTenantCallable': {
@@ -394,9 +937,71 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'vacateTenantCallable', status: 'PACKAGING_VALIDATED', tenantId: payload.tenantId };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const vacatingDate = optionalString(payload.vacatingDate || payload.vacateDate, 'vacatingDate', 30);
+      if (!DATE_ONLY_REGEX.test(vacatingDate)) throw fail('INVALID_ARGUMENT', 'vacatingDate must be YYYY-MM-DD.');
+      const damageDeductions = finiteNumber(payload.damageDeductions ?? 0, 'damageDeductions', { min: 0, max: 100000000 });
+      const refundAmount = finiteNumber(payload.refundAmount ?? 0, 'refundAmount', { min: 0, max: 100000000 });
+      const settlementNotes = optionalString(payload.settlementNotes, 'settlementNotes', 1000);
+
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const tenant = await tx.get('tenants', payload.tenantId);
+        assertResourceAccess(ctx, tenant?.data, 'Tenant');
+        if (tenant.data.status !== 'active') {
+          throw fail('FAILED_PRECONDITION', 'Tenant is already vacated or inactive.', 412);
+        }
+        const unit = await tx.get('units', tenant.data.unitId);
+        let depositId = payload.depositId || null;
+        let depositData = null;
+        if (depositId) {
+          const depositSnap = await tx.get('security_deposits', depositId);
+          depositData = depositSnap?.data || null;
+        } else {
+          const deposits = await ctx.firestore.queryByField(
+            'security_deposits',
+            'tenantId',
+            'EQUAL',
+            String(payload.tenantId)
+          );
+          if (deposits.length > 0) {
+            depositId = deposits[0].id;
+            depositData = deposits[0].data;
+          }
+        }
+
+        if (unit?.data) {
+          tx.update('units', tenant.data.unitId, {
+            status: 'vacant',
+            currentTenantId: null,
+            updatedAt: new Date(),
+          });
+        }
+        tx.update('tenants', payload.tenantId, {
+          status: 'vacated',
+          vacatingDate,
+          finalDamageDeductions: damageDeductions,
+          finalRefundAmount: refundAmount,
+          settlementNotes,
+          settledAt: new Date(),
+          updatedAt: new Date(),
+        });
+        if (depositData && depositId) {
+          const totalHeld = Number(depositData.depositAmount) || 0;
+          const totalSettled = refundAmount + damageDeductions;
+          tx.update('security_deposits', depositId, {
+            status: totalSettled >= totalHeld ? 'fully_refunded' : 'partially_refunded',
+            refundedAmount: refundAmount,
+            damageDeductionAmount: damageDeductions,
+            settlementDate: new Date(),
+            notes: `${depositData.notes || ''} | Settled: ${settlementNotes}`.trim(),
+            updatedAt: new Date(),
+          });
+        }
+        return { success: true, action: 'vacateTenantCallable', tenantId: payload.tenantId, unitId: tenant.data.unitId };
+      });
     }
   },
+
 
   // ===========================================================================
   // GROUP 3: RENT BILLING & PAYMENTS (2 Actions)
@@ -410,37 +1015,99 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'generateMonthlyBillsCallable', status: 'PACKAGING_VALIDATED', billingMonth: payload.billingMonth };
       }
-      if (!ctx.config.disableFinancialWrites && ctx.firestore) {
-        const workspaceId = ctx.authContext.workspaceId;
-        const propertyId = payload.propertyId || 'all';
-        const billId = payload.billId || `${propertyId}_${payload.billingMonth}`;
-        const billPath = 'rent_bills';
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const workspaceId = ctx.authContext.workspaceId;
+      const billingMonth = String(payload.billingMonth);
+      const propertyId = payload.propertyId && payload.propertyId !== 'all' ? String(payload.propertyId) : null;
 
-        return await ctx.firestore.runTransaction(async (tx) => {
-          const rentAmount = payload.rentAmount || 15000;
-          tx.create(billPath, billId, {
-            propertyId,
-            billingMonth: payload.billingMonth,
-            rentAmount,
-            totalDue: rentAmount,
-            totalPaid: 0,
-            balanceDue: rentAmount,
-            status: 'unpaid',
-            workspaceId,
-            ownerUid: payload.ownerUid || ctx.authContext.uid,
-            createdAt: new Date()
-          });
-          return {
-            success: true,
-            action: 'generateMonthlyBillsCallable',
-            billId,
-            billingMonth: payload.billingMonth,
-            rentAmount,
-            status: 'unpaid'
-          };
-        });
+      const allTenants = await ctx.firestore.queryByField('tenants', 'workspaceId', 'EQUAL', workspaceId);
+      const activeTenants = allTenants.filter(
+        (tenant) =>
+          tenant.data.status === 'active' &&
+          !tenant.data.isArchived &&
+          (!propertyId || tenant.data.propertyId === propertyId)
+      );
+      if (activeTenants.length === 0) {
+        return { success: true, action: 'generateMonthlyBillsCallable', billingMonth, countCreated: 0, countSkipped: 0, totalAmountBilled: 0 };
       }
-      throw new Error('Live execution not configured');
+
+      const properties = await ctx.firestore.queryByField('properties', 'workspaceId', 'EQUAL', workspaceId);
+      const units = await ctx.firestore.queryByField('units', 'workspaceId', 'EQUAL', workspaceId);
+      const propertyMap = new Map(properties.map((property) => [property.id, property.data]));
+      const unitMap = new Map(units.map((unit) => [unit.id, unit.data]));
+      const existingBills = await ctx.firestore.queryByField('rent_bills', 'workspaceId', 'EQUAL', workspaceId);
+      const existingTenantBillSet = new Set(
+        existingBills
+          .filter((bill) => bill.data.billingMonth === billingMonth)
+          .map((bill) => bill.data.tenantId)
+      );
+
+      const toCreate = [];
+      let countSkipped = 0;
+      let totalAmountBilled = 0;
+      for (const tenantDoc of activeTenants) {
+        const tenant = tenantDoc.data;
+        if (existingTenantBillSet.has(tenantDoc.id)) {
+          countSkipped += 1;
+          continue;
+        }
+        const property = propertyMap.get(tenant.propertyId) || {};
+        const unit = unitMap.get(tenant.unitId) || {};
+        const rentAmount = finiteNumber(tenant.monthlyRent ?? 0, 'monthlyRent', { min: 0, max: 100000000 });
+        const gasCharge = finiteNumber(tenant.gasCharge ?? 0, 'gasCharge', { min: 0, max: 10000000 });
+        const waterCharge = finiteNumber(tenant.waterCharge ?? 0, 'waterCharge', { min: 0, max: 10000000 });
+        const serviceCharge = finiteNumber(unit.serviceCharge ?? 0, 'serviceCharge', { min: 0, max: 10000000 });
+        const totalDue = rentAmount + gasCharge + waterCharge + serviceCharge;
+        const billId = `bill_${tenant.propertyId}_${tenantDoc.id}_${billingMonth.replace('-', '')}`;
+        toCreate.push({
+          billId,
+          data: {
+            propertyId: tenant.propertyId,
+            propertyName: property.name || 'Property',
+            unitId: tenant.unitId,
+            unitNumber: unit.unitNumber || 'Unit',
+            tenantId: tenantDoc.id,
+            tenantName: tenant.name || 'Tenant',
+            tenantMobile: tenant.mobile || '',
+            billingMonth,
+            rentAmount,
+            gasCharge,
+            waterCharge,
+            serviceCharge,
+            otherCharges: 0,
+            totalDue,
+            totalPaid: 0,
+            balanceDue: totalDue,
+            status: 'unpaid',
+            dueDate: `${billingMonth}-10`,
+            notes: '',
+            workspaceId,
+            ownerUid: tenant.ownerUid || ctx.authContext.uid,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        totalAmountBilled += totalDue;
+      }
+
+      if (toCreate.length === 0) {
+        return { success: true, action: 'generateMonthlyBillsCallable', billingMonth, countCreated: 0, countSkipped, totalAmountBilled: 0 };
+      }
+
+      await ctx.firestore.runTransaction(async (tx) => {
+        for (const bill of toCreate) {
+          tx.create('rent_bills', bill.billId, bill.data);
+        }
+      });
+
+      return {
+        success: true,
+        action: 'generateMonthlyBillsCallable',
+        billingMonth,
+        countCreated: toCreate.length,
+        countSkipped,
+        totalAmountBilled,
+      };
     }
   },
   'recordRentPaymentCallable': {
@@ -461,109 +1128,111 @@ export const ACTION_REGISTRY = {
           amount: payload.amount
         };
       }
-      if (!ctx.config.disableFinancialWrites && ctx.firestore) {
-        const workspaceId = ctx.authContext.workspaceId;
-        const billPath = 'rent_bills';
-        const paymentPath = 'rent_payments';
-        const idempotencyKey = payload.idempotencyKey || null;
-
-        return await ctx.firestore.runTransaction(async (tx) => {
-          if (idempotencyKey) {
-            const existing = await tx.get(paymentPath, idempotencyKey);
-            if (existing) {
-              return {
-                success: true,
-                action: 'recordRentPaymentCallable',
-                idempotentDuplicate: true,
-                paymentId: idempotencyKey,
-                amount: existing.data.amount,
-                status: 'POSTED_PREVIOUSLY'
-              };
-            }
-          }
-
-          let billDoc = await tx.get(billPath, payload.billId);
-          let billData;
-          if (!billDoc) {
-            const rentAmount = payload.amount || 15000;
-            billData = {
-              tenantId: payload.tenantId || null,
-              propertyId: payload.propertyId || 'prop_bhuiya',
-              billingMonth: payload.billingMonth || (payload.paymentDate ? payload.paymentDate.slice(0, 7) : new Date().toISOString().slice(0, 7)),
-              rentAmount,
-              totalDue: rentAmount,
-              totalPaid: 0,
-              balanceDue: rentAmount,
-              status: 'unpaid',
-              workspaceId,
-              ownerUid: payload.ownerUid || ctx.authContext.uid,
-              createdAt: new Date()
-            };
-            tx.create(billPath, payload.billId, billData);
-          } else {
-            billData = billDoc.data;
-          }
-          const currentTotalPaid = billData.totalPaid || 0;
-          const rentAmount = billData.rentAmount || billData.totalDue || 15000;
-          const currentBalanceDue = rentAmount - currentTotalPaid;
-
-          if (currentBalanceDue <= 0) {
-            const err = new Error(`Bill "${payload.billId}" is already fully paid`);
-            err.code = 'FAILED_PRECONDITION';
-            err.status = 412;
-            throw err;
-          }
-
-          if (payload.amount > currentBalanceDue) {
-            const err = new Error(`Payment amount ৳${payload.amount} exceeds balance due ৳${currentBalanceDue}`);
-            err.code = 'INVALID_ARGUMENT';
-            err.status = 400;
-            throw err;
-          }
-
-          const newTotalPaid = currentTotalPaid + payload.amount;
-          const newBalanceDue = rentAmount - newTotalPaid;
-          const newStatus = newBalanceDue === 0 ? 'paid' : 'partial';
-
-          tx.update(billPath, payload.billId, {
-            totalPaid: newTotalPaid,
-            balanceDue: newBalanceDue,
-            status: newStatus,
-            updatedAt: new Date()
-          });
-
-          const paymentId = idempotencyKey || `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          const paymentMonth = billData?.billingMonth || (payload.paymentDate ? payload.paymentDate.slice(0, 7) : new Date().toISOString().slice(0, 7));
-          tx.create(paymentPath, paymentId, {
-            billingMonth: paymentMonth,
-            tenantId: billData?.tenantId || payload.tenantId || null,
-            propertyId: billData?.propertyId || payload.propertyId || null,
-            billId: payload.billId,
-            amount: payload.amount,
-            paymentMethod: payload.paymentMethod,
-            paymentDate: payload.paymentDate,
-            isRentalIncome: true,
-            entryType: 'payment',
-            receiptNumber: payload.receiptNumber || `REC_${Date.now()}`,
-            workspaceId,
-            ownerUid: payload.ownerUid || ctx.authContext.uid,
-            callerUid: ctx.authContext.uid,
-            createdAt: new Date()
-          });
-
-          return {
-            success: true,
-            action: 'recordRentPaymentCallable',
-            paymentId,
-            billId: payload.billId,
-            amount: payload.amount,
-            totalPaid: newTotalPaid,
-            balanceDue: newBalanceDue,
-            status: newStatus
-          };
-        });
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const workspaceId = ctx.authContext.workspaceId;
+      const amount = finiteNumber(payload.amount, 'amount', { min: 1, max: 100000000 });
+      const paymentMethod = String(payload.paymentMethod || '').toLowerCase();
+      if (!['cash', 'bank', 'bkash', 'nagad', 'other'].includes(paymentMethod)) {
+        throw fail('INVALID_ARGUMENT', `Invalid payment method "${paymentMethod}".`);
       }
-      throw new Error('Live execution not configured');
+      const transactionId = optionalString(payload.transactionId, 'transactionId', 100) || null;
+      const paymentDate = optionalString(payload.paymentDate, 'paymentDate', 10);
+      if (!DATE_ONLY_REGEX.test(paymentDate)) throw fail('INVALID_ARGUMENT', 'paymentDate must be YYYY-MM-DD.');
+
+      if (transactionId) {
+        const existingPayments = await ctx.firestore.queryByField('rent_payments', 'workspaceId', 'EQUAL', workspaceId);
+        if (
+          existingPayments.some(
+            (payment) =>
+              payment.data.transactionId === transactionId &&
+              payment.data.entryType === 'payment'
+          )
+        ) {
+          throw fail('ALREADY_EXISTS', `Duplicate transaction ID "${transactionId}".`, 409);
+        }
+      }
+
+      const idempotencyKey = optionalString(payload.idempotencyKey, 'idempotencyKey', 128) || null;
+      return await ctx.firestore.runTransaction(async (tx) => {
+        if (idempotencyKey) {
+          const existingPayment = await tx.get('rent_payments', idempotencyKey);
+          if (existingPayment) {
+            return {
+              success: true,
+              action: 'recordRentPaymentCallable',
+              idempotentDuplicate: true,
+              paymentId: idempotencyKey,
+              amount: existingPayment.data.amount,
+              status: 'POSTED_PREVIOUSLY',
+            };
+          }
+        }
+
+        const billDoc = await tx.get('rent_bills', payload.billId);
+        assertResourceAccess(ctx, billDoc?.data, 'Rent bill');
+        const bill = billDoc.data;
+        if (bill.status === 'paid' || Number(bill.balanceDue) <= 0) {
+          throw fail('FAILED_PRECONDITION', 'This bill is already fully paid.', 412);
+        }
+        if (amount > Number(bill.balanceDue)) {
+          throw fail(
+            'INVALID_ARGUMENT',
+            `Payment amount (৳${amount}) exceeds remaining balance due (৳${bill.balanceDue}).`
+          );
+        }
+
+        const timestampStr = Date.now().toString().slice(-4);
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000).toString().slice(-2);
+        const receiptNumber = `REC-${String(bill.billingMonth).replace('-', '')}-${timestampStr}${randomSuffix}`;
+        const newTotalPaid = Number(bill.totalPaid || 0) + amount;
+        const newBalanceDue = Math.max(0, Number(bill.totalDue) - newTotalPaid);
+        const newStatus = newBalanceDue === 0 ? 'paid' : 'partial';
+        const paymentId = idempotencyKey || newDocumentId('pay');
+
+        tx.create('rent_payments', paymentId, {
+          billId: payload.billId,
+          propertyId: bill.propertyId || null,
+          propertyName: bill.propertyName || '',
+          unitId: bill.unitId || null,
+          unitNumber: bill.unitNumber || '',
+          tenantId: bill.tenantId || null,
+          tenantName: bill.tenantName || '',
+          billingMonth: bill.billingMonth,
+          amount,
+          paymentMethod,
+          transactionId,
+          receiptNumber,
+          notes: optionalString(payload.notes, 'notes', 500),
+          entryType: 'payment',
+          isRentalIncome: true,
+          paymentDate,
+          workspaceId,
+          ownerUid: ctx.authContext.uid,
+          createdAt: new Date(),
+        });
+
+        tx.update('rent_bills', payload.billId, {
+          totalPaid: newTotalPaid,
+          balanceDue: newBalanceDue,
+          status: newStatus,
+          updatedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          action: 'recordRentPaymentCallable',
+          paymentId,
+          receiptNumber,
+          amount,
+          totalPaid: newTotalPaid,
+          balanceDue: newBalanceDue,
+          status: newStatus,
+          tenantName: bill.tenantName || '',
+          unitNumber: bill.unitNumber || '',
+          propertyName: bill.propertyName || '',
+          billingMonth: bill.billingMonth,
+        };
+      });
     }
   },
 
@@ -589,6 +1258,13 @@ export const ACTION_REGISTRY = {
         const expensePath = 'expenses';
         const expenseId = payload.expenseId || `exp_${Date.now()}`;
 
+        let propertyName = payload.propertyName || null;
+        if (payload.propertyId) {
+          const property = await ctx.firestore.getDocument('properties', String(payload.propertyId));
+          assertResourceAccess(ctx, property?.data, 'Property');
+          propertyName = property.data.name || property.data.nameEn || 'Property';
+        }
+
         return await ctx.firestore.runTransaction(async (tx) => {
           tx.create(expensePath, expenseId, {
             title: payload.title || payload.description,
@@ -599,14 +1275,19 @@ export const ACTION_REGISTRY = {
             billingMonth: payload.billingMonth,
             description: payload.description,
             paymentMethod: payload.paymentMethod || 'cash',
+            propertyId: payload.propertyId || null,
+            propertyName: payload.propertyName || null,
             status: 'active',
+            reversalReason: null,
+            reversedAt: null,
             isOperatingExpense: true,
             isRentalIncome: false,
-            propertyId: payload.propertyId || null,
+            auditHistory: [],
             workspaceId,
-            ownerUid: payload.ownerUid || ctx.authContext.uid,
-            createdBy: ctx.authContext.uid,
-            createdAt: new Date()
+            ownerUid: ctx.authContext.uid,
+            createdBy: ctx.verifiedUser?.email || ctx.authContext.uid,
+            createdAt: new Date(),
+            updatedAt: new Date()
           });
 
           return {
@@ -632,7 +1313,69 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'updateExpenseCallable', status: 'PACKAGING_VALIDATED', expenseId: payload.expenseId };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const title = optionalString(payload.title || payload.description, 'title', 150);
+      if (!title) throw fail('INVALID_ARGUMENT', 'Expense title is required.');
+      const amount = finiteNumber(payload.amount, 'amount', { min: 1, max: 100000000 });
+      const group = String(payload.group || '').toLowerCase().trim();
+      const category = String(payload.category || '').toLowerCase().trim();
+      if (!group || !category) throw fail('INVALID_ARGUMENT', 'Expense group and category are required.');
+      const expenseDate = optionalString(payload.expenseDate, 'expenseDate', 10);
+      if (!DATE_ONLY_REGEX.test(expenseDate)) throw fail('INVALID_ARGUMENT', 'expenseDate must be YYYY-MM-DD.');
+      const reason = optionalString(payload.reason, 'reason', 500);
+      if (!reason) throw fail('INVALID_ARGUMENT', 'A reason for editing is required.');
+
+      let propertyName = null;
+      if (payload.propertyId) {
+        const property = await ctx.firestore.getDocument('properties', String(payload.propertyId));
+        assertResourceAccess(ctx, property?.data, 'Property');
+        propertyName = property.data.name || property.data.nameEn || 'Property';
+      }
+
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const expense = await tx.get('expenses', payload.expenseId);
+        assertResourceAccess(ctx, expense?.data, 'Expense');
+        const oldData = expense.data;
+        if (oldData.status === 'reversed') {
+          throw fail('FAILED_PRECONDITION', 'Cannot edit a reversed expense record.', 412);
+        }
+        const auditEntry = {
+          editedAt: new Date().toISOString(),
+          editedBy: ctx.verifiedUser?.email || ctx.authContext.uid,
+          reason,
+          previousAmount: oldData.amount,
+          newAmount: amount,
+          previousTitle: oldData.title,
+          newTitle: title,
+          previousCategory: oldData.category,
+          newCategory: category,
+        };
+        const history = Array.isArray(oldData.auditHistory) ? oldData.auditHistory : [];
+        const updatedHistory = [...history, auditEntry];
+        tx.update('expenses', payload.expenseId, {
+          title,
+          amount,
+          group,
+          category,
+          propertyId: payload.propertyId || null,
+          propertyName,
+          expenseDate,
+          billingMonth: expenseDate.slice(0, 7),
+          paymentMethod: String(payload.paymentMethod || 'cash').toLowerCase(),
+          paidTo: optionalString(payload.paidTo, 'paidTo', 150) || null,
+          description: optionalString(payload.description, 'description', 1000) || null,
+          receiptUrl: optionalString(payload.receiptUrl, 'receiptUrl', 500) || null,
+          auditHistory: updatedHistory,
+          updatedAt: new Date(),
+        });
+        return {
+          success: true,
+          action: 'updateExpenseCallable',
+          expenseId: payload.expenseId,
+          newAmount: amount,
+          auditEntriesCount: updatedHistory.length,
+        };
+      });
     }
   },
   'reverseExpenseCallable': {
@@ -645,7 +1388,75 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'reverseExpenseCallable', status: 'PACKAGING_VALIDATED', expenseId: payload.expenseId, statusReversed: true };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const reason = optionalString(payload.reason, 'reason', 500);
+      if (!reason) throw fail('INVALID_ARGUMENT', 'A reason is required to reverse an expense record.');
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const expense = await tx.get('expenses', payload.expenseId);
+        assertResourceAccess(ctx, expense?.data, 'Expense');
+        const data = expense.data;
+        if (data.status === 'reversed') {
+          throw fail('FAILED_PRECONDITION', 'This expense has already been reversed.', 412);
+        }
+        const auditEntry = {
+          editedAt: new Date().toISOString(),
+          editedBy: ctx.verifiedUser?.email || ctx.authContext.uid,
+          reason: `[REVERSAL] ${reason}`,
+          previousAmount: data.amount,
+          newAmount: 0,
+          previousTitle: data.title,
+          newTitle: `[REVERSED] ${data.title}`,
+          previousCategory: data.category,
+          newCategory: data.category,
+        };
+        const history = Array.isArray(data.auditHistory) ? data.auditHistory : [];
+        tx.update('expenses', payload.expenseId, {
+          status: 'reversed',
+          reversalReason: reason,
+          auditHistory: [...history, auditEntry],
+          reversedAt: new Date(),
+          updatedAt: new Date(),
+        });
+        return { success: true, action: 'reverseExpenseCallable', expenseId: payload.expenseId, status: 'reversed' };
+      });
+    }
+  },
+
+  'reverseRentPaymentCallable': {
+    permission: ACTION_PERMISSIONS['reverseRentPaymentCallable'],
+    validate: (p) => { validateRequired(p, 'paymentId'); validateRequired(p, 'reason'); },
+    execute: async (ctx, p) => {
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'reverseRentPaymentCallable', status: 'PACKAGING_VALIDATED' };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const reversalId = `reversal_${p.paymentId}`;
+      return ctx.firestore.runTransaction(async (tx) => {
+        const payment = await tx.get('rent_payments', p.paymentId); assertResourceAccess(ctx, payment?.data, 'Rent payment');
+        if (payment.data.status === 'reversed' || payment.data.reversalId) return { success: true, duplicate: true, reversalId };
+        const amount = Number(payment.data.amount) || 0; const bill = payment.data.billId ? await tx.get('rent_bills', payment.data.billId) : null;
+        tx.update('rent_payments', p.paymentId, { status: 'reversed', reversedAt: new Date(), reversalId, reversalReason: p.reason, originalPaymentId: p.paymentId });
+        if (bill?.data) { const paid = Math.max(0, (Number(bill.data.totalPaid) || 0) - amount); const due = Number(bill.data.totalDue) || 0; tx.update('rent_bills', payment.data.billId, { totalPaid: paid, balanceDue: Math.max(0, due - paid), status: paid >= due ? 'paid' : paid > 0 ? 'partial' : 'unpaid', updatedAt: new Date() }); }
+        tx.create('rent_payments', reversalId, { entryType: 'reversal', amount: -amount, originalPaymentId: p.paymentId, billId: payment.data.billId || null, billingMonth: payment.data.billingMonth || null, workspaceId: ctx.authContext.workspaceId, ownerUid: ctx.authContext.uid, reason: p.reason, createdAt: new Date() });
+        return { success: true, paymentId: p.paymentId, reversalId, amount };
+      });
+    }
+  },
+  'cancelRentBillCallable': {
+    permission: ACTION_PERMISSIONS['cancelRentBillCallable'],
+    validate: (p) => { validateRequired(p, 'billId'); validateRequired(p, 'reason'); },
+    execute: async (ctx, p) => {
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'cancelRentBillCallable', status: 'PACKAGING_VALIDATED' };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      return ctx.firestore.runTransaction(async (tx) => { const bill = await tx.get('rent_bills', p.billId); assertResourceAccess(ctx, bill?.data, 'Rent bill'); if (['cancelled','canceled'].includes(bill.data.status)) return { success: true, duplicate: true, billId: p.billId }; if ((Number(bill.data.totalPaid) || 0) > 0 && !p.allowPaidCancellation) throw fail('FAILED_PRECONDITION', 'Paid bills require payment reversal before cancellation.', 412); tx.update('rent_bills', p.billId, { status: 'cancelled', cancelledAt: new Date(), cancellationReason: p.reason, previousStatus: bill.data.status, balanceDue: 0, updatedAt: new Date() }); return { success: true, billId: p.billId, status: 'cancelled' }; });
+    }
+  },
+  'refundSecurityDepositCallable': {
+    permission: ACTION_PERMISSIONS['refundSecurityDepositCallable'],
+    validate: (p) => { validateRequired(p, 'depositId'); validateRequired(p, 'reason'); validatePositiveNumber(p, 'amount'); },
+    execute: async (ctx, p) => {
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'refundSecurityDepositCallable', status: 'PACKAGING_VALIDATED' };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const key = p.idempotencyKey || `refund:${p.depositId}:${p.amount}`; const refundId = `refund_${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      return ctx.firestore.runTransaction(async (tx) => { const dep = await tx.get('security_deposits', p.depositId); assertResourceAccess(ctx, dep?.data, 'Security deposit'); const existing = await tx.get('security_deposit_refunds', refundId); if (existing?.data) return { success: true, duplicate: true, refundId }; const balance = Number(dep.data.balance ?? dep.data.remainingBalance ?? dep.data.amount ?? 0); const amount = finiteNumber(p.amount, 'amount', { min: .01, max: balance }); const remaining = balance - amount; tx.update('security_deposits', p.depositId, { refundedAmount: (Number(dep.data.refundedAmount) || 0) + amount, balance: remaining, remainingBalance: remaining, status: remaining <= 0 ? 'refunded' : 'partially_refunded', updatedAt: new Date(), refundHistory: [...(Array.isArray(dep.data.refundHistory) ? dep.data.refundHistory : []), { refundId, amount, reason: p.reason, createdAt: new Date(), createdBy: ctx.authContext.uid }] }); tx.create('security_deposit_refunds', refundId, { depositId: p.depositId, amount, reason: p.reason, idempotencyKey: key, workspaceId: ctx.authContext.workspaceId, ownerUid: ctx.authContext.uid, isRentalIncome: false, createdAt: new Date() }); return { success: true, refundId, depositId: p.depositId, amount, remainingBalance: remaining }; });
     }
   },
 
@@ -659,41 +1470,49 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'seedDefaultBeneficiariesCallable', status: 'PACKAGING_VALIDATED', count: 5 };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const existing = await ctx.firestore.queryByField('beneficiaries', 'workspaceId', 'EQUAL', ctx.authContext.workspaceId);
+      if (existing.some((d) => !d.data?.isArchived)) return { success: true, seeded: false, count: 0 };
+      const defaults = [['Brother 1','brother',45000,1],['Brother 2','brother',45000,2],['Brother 3','brother',45000,3],['Mother','mother',25000,4],['Sister','sister',25000,5]];
+      return await ctx.firestore.runTransaction(async (tx) => {
+        const ids = [];
+        for (const [name, relationship, target, priorityOrder] of defaults) {
+          const id = newDocumentId('beneficiary'); ids.push(id);
+          tx.create('beneficiaries', id, { workspaceId: ctx.authContext.workspaceId, ownerUid: ctx.authContext.uid, name, relationship, defaultMonthlyTarget: target, effectiveFromMonth: payload.effectiveFromMonth || new Date().toISOString().slice(0,7), targetHistory: [{ monthlyTarget: target, effectiveFromMonth: payload.effectiveFromMonth || new Date().toISOString().slice(0,7), reason: 'Initial system default allocation', updatedAt: new Date() }], payoutMethod: { type: 'bank' }, priorityOrder, status: 'active', isArchived: false, notes: 'Initial default family beneficiary', createdAt: new Date(), updatedAt: new Date() });
+        }
+        return { success: true, seeded: true, count: ids.length, beneficiaryIds: ids, totalTarget: 185000 };
+      });
     }
   },
   'createBeneficiaryCallable': {
     permission: ACTION_PERMISSIONS['createBeneficiaryCallable'],
-    validate: (p) => {
+      validate: (p) => {
       validateRequired(p, 'name');
       validateRequired(p, 'relationship');
       validatePositiveNumber(p, 'targetAmount');
     },
     execute: async (ctx, payload) => {
-      if (ctx.config.disableFinancialWrites) {
-        return { success: true, action: 'createBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: `mock_ben_${Date.now()}` };
-      }
-      throw new Error('Live execution not configured');
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'createBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: `mock_ben_${Date.now()}` };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const id = payload.beneficiaryId || newDocumentId('beneficiary'); const target = finiteNumber(payload.targetAmount ?? payload.defaultMonthlyTarget, 'targetAmount', { min: 0, max: 100000000 }); const month = payload.effectiveFromMonth || new Date().toISOString().slice(0,7);
+      return await ctx.firestore.runTransaction(async (tx) => { tx.create('beneficiaries', id, { workspaceId:ctx.authContext.workspaceId, ownerUid:ctx.authContext.uid, name:optionalString(payload.name,'name',100), relationship:optionalString(payload.relationship,'relationship',30).toLowerCase(), defaultMonthlyTarget:target, effectiveFromMonth:month, targetHistory:[{monthlyTarget:target,effectiveFromMonth:month,reason:'Beneficiary registered',updatedAt:new Date()}], payoutMethod:payload.payoutMethod||{type:'bank'}, priorityOrder:Number(payload.priorityOrder)||10, notes:optionalString(payload.notes,'notes',500), status:'active', isArchived:false, createdAt:new Date(), updatedAt:new Date() }); return {success:true,beneficiaryId:id}; });
     }
   },
   'updateBeneficiaryCallable': {
     permission: ACTION_PERMISSIONS['updateBeneficiaryCallable'],
     validate: (p) => validateRequired(p, 'beneficiaryId'),
     execute: async (ctx, payload) => {
-      if (ctx.config.disableFinancialWrites) {
-        return { success: true, action: 'updateBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: payload.beneficiaryId };
-      }
-      throw new Error('Live execution not configured');
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'updateBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: payload.beneficiaryId };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      return await ctx.firestore.runTransaction(async (tx) => { const ref=await tx.get('beneficiaries',payload.beneficiaryId); assertResourceAccess(ctx,ref?.data,'Beneficiary'); if(ref.data.isArchived) throw fail('FAILED_PRECONDITION','Cannot edit an archived beneficiary.',412); const u={updatedAt:new Date()}; for(const k of ['name','relationship','notes','payoutMethod','priorityOrder','status']) if(payload[k]!==undefined) u[k]=payload[k]; if(payload.defaultMonthlyTarget!==undefined||payload.targetAmount!==undefined){const target=finiteNumber(payload.defaultMonthlyTarget??payload.targetAmount,'defaultMonthlyTarget',{min:0,max:100000000});const month=payload.effectiveFromMonth||new Date().toISOString().slice(0,7);u.defaultMonthlyTarget=target;u.effectiveFromMonth=month;u.targetHistory=[...(Array.isArray(ref.data.targetHistory)?ref.data.targetHistory:[]),{monthlyTarget:target,effectiveFromMonth:month,reason:payload.reason||'Target updated',updatedAt:new Date()}];} tx.update('beneficiaries',payload.beneficiaryId,u); return {success:true,beneficiaryId:payload.beneficiaryId}; });
     }
   },
   'archiveBeneficiaryCallable': {
     permission: ACTION_PERMISSIONS['archiveBeneficiaryCallable'],
     validate: (p) => validateRequired(p, 'beneficiaryId'),
     execute: async (ctx, payload) => {
-      if (ctx.config.disableFinancialWrites) {
-        return { success: true, action: 'archiveBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: payload.beneficiaryId, isArchived: true };
-      }
-      throw new Error('Live execution not configured');
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'archiveBeneficiaryCallable', status: 'PACKAGING_VALIDATED', beneficiaryId: payload.beneficiaryId, isArchived: true };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); return await ctx.firestore.runTransaction(async(tx)=>{const ref=await tx.get('beneficiaries',payload.beneficiaryId);assertResourceAccess(ctx,ref?.data,'Beneficiary');tx.update('beneficiaries',payload.beneficiaryId,{status:'archived',isArchived:true,archivedAt:new Date(),updatedAt:new Date()});return {success:true,beneficiaryId:payload.beneficiaryId,isArchived:true};});
     }
   },
   'getOrCreateMonthlyDistributionCallable': {
@@ -703,12 +1522,12 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'getOrCreateMonthlyDistributionCallable', status: 'PACKAGING_VALIDATED', month: payload.distributionMonth };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); const id=`${ctx.authContext.workspaceId}_${payload.distributionMonth}`; return await ctx.firestore.runTransaction(async(tx)=>{const old=await tx.get('family_distributions',id);if(old?.data)return {success:true,isNew:false,distributionId:id,...old.data};const docs=await ctx.firestore.queryByField('beneficiaries','workspaceId','EQUAL',ctx.authContext.workspaceId);const rows=docs.filter(d=>d.data?.status==='active'&&!d.data?.isArchived).map(d=>{const target=Number(d.data.defaultMonthlyTarget)||0;return {beneficiaryId:d.id,name:d.data.name,relationship:d.data.relationship,baseMonthlyTarget:target,specialAdjustment:0,effectiveTarget:target,actualDisbursed:0,pendingAmount:target,payoutStatus:'unpaid',payouts:[]};});const total=rows.reduce((s,b)=>s+b.effectiveTarget,0);tx.create('family_distributions',id,{workspaceId:ctx.authContext.workspaceId,ownerUid:ctx.authContext.uid,distributionMonth:payload.distributionMonth,calculatedTargetTotal:total,finalTargetTotal:total,actualTotalDisbursed:0,remainingPendingTotal:total,specialAdjustmentTotal:0,netRentCollected:0,totalExpensesDeducted:0,distributableSurplus:0,reserveInflow:0,surplusTransferredToReserve:0,status:'draft',isFinalized:false,beneficiarySnapshots:rows,createdAt:new Date(),updatedAt:new Date()});return {success:true,isNew:true,distributionId:id,distributionMonth:payload.distributionMonth,finalTargetTotal:total,beneficiarySnapshots:rows};});
     }
   },
   'applySpecialAdjustmentCallable': {
     permission: ACTION_PERMISSIONS['applySpecialAdjustmentCallable'],
-    validate: (p) => {
+      validate: (p) => {
       validateRequired(p, 'distributionId');
       validateRequired(p, 'beneficiaryId');
       validateRequired(p, 'adjustmentAmount', 'number');
@@ -718,7 +1537,7 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'applySpecialAdjustmentCallable', status: 'PACKAGING_VALIDATED' };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); const id=payload.distributionId||payload.distributionMonth; return await ctx.firestore.runTransaction(async(tx)=>{const ref=await tx.get('family_distributions',id);assertResourceAccess(ctx,ref?.data,'Distribution');const rows=Array.isArray(ref.data.beneficiarySnapshots)?[...ref.data.beneficiarySnapshots]:[];const i=rows.findIndex((b)=>b.beneficiaryId===payload.beneficiaryId);if(i<0)throw fail('NOT_FOUND','Beneficiary is not in this distribution.',404);const b={...rows[i],specialAdjustment:finiteNumber(payload.adjustmentAmount,'adjustmentAmount',{min:-10000000,max:10000000}),adjustmentReason:optionalString(payload.reason,'reason',300)};b.effectiveTarget=Math.max(0,(Number(b.baseMonthlyTarget)||0)+b.specialAdjustment);b.pendingAmount=Math.max(0,b.effectiveTarget-(Number(b.actualDisbursed)||0));rows[i]=b;const total=rows.reduce((s,x)=>s+(Number(x.effectiveTarget)||0),0);tx.update('family_distributions',id,{beneficiarySnapshots:rows,specialAdjustmentTotal:rows.reduce((s,x)=>s+(Number(x.specialAdjustment)||0),0),finalTargetTotal:total,remainingPendingTotal:Math.max(0,total-(Number(ref.data.actualTotalDisbursed)||0)),updatedAt:new Date()});return {success:true,distributionId:id,beneficiaryId:payload.beneficiaryId,newEffectiveTarget:b.effectiveTarget};});
     }
   },
   'recordBeneficiaryPayoutCallable': {
@@ -734,9 +1553,12 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'recordBeneficiaryPayoutCallable', status: 'PACKAGING_VALIDATED', amount: payload.amount };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); const id=payload.distributionId||payload.distributionMonth; const key=payload.idempotencyKey||payload.transactionId||`${id}:${payload.beneficiaryId}:${payload.amount}:${payload.paymentDate}`; return await ctx.firestore.runTransaction(async(tx)=>{const ref=await tx.get('family_distributions',id);assertResourceAccess(ctx,ref?.data,'Distribution');const rows=Array.isArray(ref.data.beneficiarySnapshots)?[...ref.data.beneficiarySnapshots]:[];const i=rows.findIndex((b)=>b.beneficiaryId===payload.beneficiaryId);if(i<0)throw fail('NOT_FOUND','Beneficiary is not in this distribution.',404);const b={...rows[i]};const amount=finiteNumber(payload.amount,'amount',{min:.01,max:100000000});if(amount>(Number(b.effectiveTarget)||0)-(Number(b.actualDisbursed)||0))throw fail('FAILED_PRECONDITION','Payout exceeds beneficiary target.',412);if((b.payouts||[]).some((p)=>p.idempotencyKey===key))return {success:true,duplicate:true,distributionId:id};b.actualDisbursed=(Number(b.actualDisbursed)||0)+amount;b.pendingAmount=Math.max(0,(Number(b.effectiveTarget)||0)-b.actualDisbursed);b.payoutStatus=b.pendingAmount<=0?'paid':'partial';b.payouts=[...(b.payouts||[]),{payoutId:`payout_${key}`,idempotencyKey:key,amount,paymentDate:payload.paymentDate,paymentMethod:payload.paymentMethod,transactionId:payload.transactionId||null,paidBy:ctx.authContext.uid,createdAt:new Date()}];rows[i]=b;const total=(Number(ref.data.actualTotalDisbursed)||0)+amount;tx.update('family_distributions',id,{beneficiarySnapshots:rows,actualTotalDisbursed:total,remainingPendingTotal:Math.max(0,(Number(ref.data.finalTargetTotal)||0)-total),status:'in_progress',updatedAt:new Date()});return {success:true,payoutId:`payout_${key}`,distributionId:id,beneficiaryId:payload.beneficiaryId,amount};});
     }
   },
+
+  'restoreBeneficiaryCallable': { permission: ACTION_PERMISSIONS['restoreBeneficiaryCallable'], validate: (p) => validateRequired(p,'beneficiaryId'), execute: async (ctx,p) => { if(!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); return ctx.firestore.runTransaction(async(tx)=>{const ref=await tx.get('beneficiaries',p.beneficiaryId);assertResourceAccess(ctx,ref?.data,'Beneficiary');tx.update('beneficiaries',p.beneficiaryId,{status:'active',isArchived:false,restoredAt:new Date(),updatedAt:new Date()});return {success:true,beneficiaryId:p.beneficiaryId,isArchived:false};}); } },
+  'getBeneficiaryHistoryCallable': { permission: ACTION_PERMISSIONS['getBeneficiaryHistoryCallable'], validate: (p) => validateRequired(p,'beneficiaryId'), execute: async (ctx,p) => { if(!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); const ref=await ctx.firestore.getDocument('beneficiaries',p.beneficiaryId);assertResourceAccess(ctx,ref?.data,'Beneficiary'); const logs=await ctx.firestore.queryByField('audit_logs','documentId','EQUAL',p.beneficiaryId); return {success:true,beneficiaryId:p.beneficiaryId,history:logs.filter(x=>x.data?.workspaceId===ctx.authContext.workspaceId).map(x=>({id:x.id,...x.data}))}; } },
 
   // ===========================================================================
   // GROUP 6: FAMILY RESERVE FUND (3 Actions)
@@ -858,7 +1680,44 @@ export const ACTION_REGISTRY = {
       if (ctx.config.disableFinancialWrites) {
         return { success: true, action: 'transferSurplusToReserveCallable', status: 'PACKAGING_VALIDATED', amount: payload.amount };
       }
-      throw new Error('Live execution not configured');
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION','Firestore is not configured.',500); const key=payload.idempotencyKey||`${ctx.authContext.workspaceId}:${payload.fromBillingMonth}:${payload.amount}`; const ledgerId=`transfer_${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`; return await ctx.firestore.runTransaction(async(tx)=>{const reserve=await tx.get('reserve_funds',ctx.authContext.workspaceId);if(!reserve?.data)throw fail('NOT_FOUND','Reserve fund not initialized.',404);const existing=await tx.get('reserve_ledger',ledgerId);if(existing?.data)return {success:true,duplicate:true,transactionId:ledgerId,newBalance:reserve.data.balance??reserve.data.currentBalance};const before=Number(reserve.data.balance??reserve.data.currentBalance)||0;const amount=finiteNumber(payload.amount,'amount',{min:.01,max:100000000});const after=before+amount;tx.update('reserve_funds',ctx.authContext.workspaceId,{balance:after,currentBalance:after,totalDeposited:(Number(reserve.data.totalDeposited)||0)+amount,updatedAt:new Date()});tx.create('reserve_ledger',ledgerId,{type:'surplus_transfer',amount,balanceBefore:before,balanceAfter:after,fromBillingMonth:payload.fromBillingMonth,workspaceId:ctx.authContext.workspaceId,ownerUid:ctx.authContext.uid,isRentalIncome:false,isInternalTransfer:true,idempotencyKey:key,createdAt:new Date()});return {success:true,transactionId:ledgerId,amount,newBalance:after,isRentalIncome:false,isInternalTransfer:true};});
+    }
+  },
+  'recordReserveTransactionCallable': {
+    permission: ACTION_PERMISSIONS['recordReserveTransactionCallable'],
+    validate: (p) => { validatePositiveNumber(p, 'amount'); validateRequired(p, 'type'); validateRequired(p, 'reason'); },
+    execute: async (ctx, p) => {
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'recordReserveTransactionCallable', status: 'PACKAGING_VALIDATED' };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const key = p.idempotencyKey || `${ctx.authContext.workspaceId}:${p.type}:${p.amount}:${p.reason}`;
+      const id = `reserve_${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      return ctx.firestore.runTransaction(async (tx) => {
+        const reserve = await tx.get('reserve_funds', ctx.authContext.workspaceId);
+        if (!reserve?.data) throw fail('NOT_FOUND', 'Reserve fund not initialized.', 404);
+        const existing = await tx.get('reserve_ledger', id);
+        if (existing?.data) return { success: true, duplicate: true, transactionId: id };
+        const before = Number(reserve.data.balance ?? reserve.data.currentBalance) || 0;
+        const signedAmount = ['withdrawal', 'expense', 'debit'].includes(String(p.type).toLowerCase()) ? -Number(p.amount) : Number(p.amount);
+        const after = before + signedAmount;
+        if (after < 0) throw fail('FAILED_PRECONDITION', 'Reserve balance cannot become negative.', 412);
+        tx.update('reserve_funds', ctx.authContext.workspaceId, { balance: after, currentBalance: after, updatedAt: new Date() });
+        tx.create('reserve_ledger', id, { type: p.type, amount: Number(p.amount), signedAmount, balanceBefore: before, balanceAfter: after, reason: p.reason, workspaceId: ctx.authContext.workspaceId, ownerUid: ctx.authContext.uid, isRentalIncome: false, isInternalTransfer: true, idempotencyKey: key, createdAt: new Date() });
+        return { success: true, transactionId: id, amount: Number(p.amount), newBalance: after, isInternalTransfer: true };
+      });
+    }
+  },
+  'reconcileReserveBalanceCallable': {
+    permission: ACTION_PERMISSIONS['reconcileReserveBalanceCallable'],
+    validate: () => {},
+    execute: async (ctx) => {
+      if (ctx.config.disableFinancialWrites) return { success: true, action: 'reconcileReserveBalanceCallable', status: 'PACKAGING_VALIDATED' };
+      if (!ctx.firestore) throw fail('FAILED_PRECONDITION', 'Firestore is not configured.', 500);
+      const reserve = await ctx.firestore.getDocument('reserve_funds', ctx.authContext.workspaceId);
+      if (!reserve?.data) throw fail('NOT_FOUND', 'Reserve fund not initialized.', 404);
+      const ledger = await ctx.firestore.queryByField('reserve_ledger', 'workspaceId', 'EQUAL', ctx.authContext.workspaceId);
+      const calculated = ledger.reduce((sum, row) => sum + (Number(row.data?.signedAmount ?? (['withdrawal','expense','debit'].includes(String(row.data?.type).toLowerCase()) ? -Number(row.data?.amount || 0) : Number(row.data?.amount || 0))) || 0), 0) + (Number(reserve.data.totalDeposited) || 0) - (Number(reserve.data.totalWithdrawn) || 0);
+      const recorded = Number(reserve.data.balance ?? reserve.data.currentBalance) || 0;
+      return { success: true, recordedBalance: recorded, calculatedBalance: calculated, difference: recorded - calculated, reconciled: Math.abs(recorded - calculated) < 0.01 };
     }
   },
 
@@ -1380,7 +2239,20 @@ export async function dispatchAction(actionName, rawPayload, authContext, worker
   // 3. Input Validation
   actionDef.validate(normalizedPayload);
 
-  // 4. Execution
-  const result = await actionDef.execute(workerContext, normalizedPayload);
-  return result;
+  // 4. Execution (with immutable audit trail for every administrative mutation)
+  const previousValues = await readAuditTarget(workerContext, actionName, normalizedPayload);
+  try {
+    const result = await actionDef.execute(workerContext, normalizedPayload);
+    await recordAuditLog(workerContext, actionName, normalizedPayload, { status: 'success', result }, previousValues);
+    return result;
+  } catch (error) {
+    await recordAuditLog(
+      workerContext,
+      actionName,
+      normalizedPayload,
+      { status: 'failure', errorCode: error?.code || 'INTERNAL_ERROR' },
+      previousValues
+    );
+    throw error;
+  }
 }

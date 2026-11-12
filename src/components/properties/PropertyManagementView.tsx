@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { HyperCard } from '../ui/hyperos/HyperCard';
 import type { Property, PropertyInput, Unit } from '../../types/property';
 import {
   subscribeProperties,
@@ -9,7 +10,9 @@ import {
   seedInitialProperties,
 } from '../../services/propertyService';
 import PropertyModal from './PropertyModal';
+import { BackIconButton } from '../ui/hyperos/BackIconButton';
 import UnitList from './UnitList';
+import { StatTile } from '../ui/hyperos/StatTile';
 
 interface PropertyManagementViewProps {
   ownerUid: string;
@@ -133,7 +136,7 @@ export default function PropertyManagementView({ ownerUid, workspaceId }: Proper
   const archivedCount = properties.filter((p) => p.isArchived).length;
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="operations-view space-y-6 animate-fadeIn">
       {/* Top Banner & Primary Actions */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -287,7 +290,7 @@ export default function PropertyManagementView({ ownerUid, workspaceId }: Proper
                 <div>
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--color-primary-fill)] text-white flex items-center justify-center shrink-0">
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V8.25l-9-6.75-9 6.75V21h4.5" />
                       </svg>

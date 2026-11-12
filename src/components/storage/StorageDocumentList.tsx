@@ -98,7 +98,7 @@ export const StorageDocumentList: React.FC<StorageDocumentListProps> = ({
   };
 
   return (
-    <div className={`space-y-3 ${className}`}>
+    <div className={`operations-view space-y-3 ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-[var(--hyper-text-primary)] flex items-center gap-2">

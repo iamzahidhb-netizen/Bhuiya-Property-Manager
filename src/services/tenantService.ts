@@ -252,6 +252,26 @@ export async function registerTenant(
 }
 
 /**
+ * Update editable tenant profile fields through the trusted Callable API.
+ * Financial fields (rent, deposits, unit) are intentionally excluded; those
+ * are managed through dedicated rent/deposit/lease workflows.
+ */
+export async function updateTenant(input: {
+  tenantId: string;
+  name?: string;
+  mobile?: string;
+  nid?: string;
+  address?: string;
+  notes?: string;
+  moveInDate?: string;
+}): Promise<void> {
+  const updateFn = createCallable<typeof input, { success: boolean; tenantId: string }>(
+    'updateTenantCallable'
+  );
+  await updateFn(input);
+}
+
+/**
  * Vacate an active tenant. Atomically restores unit to vacant and settles the security deposit.
  */
 export async function vacateTenant(

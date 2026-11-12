@@ -29,10 +29,17 @@ import ReserveFundModal from './ReserveFundModal';
 
 interface DistributionManagementViewProps {
   ownerUid: string;
+  /** Rendered inside the Hisab dashboard tab (month is dashboard-controlled). */
+  embedded?: boolean;
+  month?: string;
+  onMonthChange?: (month: string) => void;
 }
 
 export default function DistributionManagementView({
   ownerUid,
+  embedded = false,
+  month,
+  onMonthChange,
 }: DistributionManagementViewProps) {
   // Current month in YYYY-MM
   const currentMonthStr = useMemo(() => {
@@ -42,7 +49,14 @@ export default function DistributionManagementView({
     return `${y}-${m}`;
   }, []);
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const [internalMonth, setInternalMonth] = useState(currentMonthStr);
+  // When embedded, the dashboard owns the accounting month and keeps every
+  // module tab on the same period.
+  const selectedMonth = month ?? internalMonth;
+  const setSelectedMonth = (nextMonth: string) => {
+    setInternalMonth(nextMonth);
+    onMonthChange?.(nextMonth);
+  };
   const [activeSubTab, setActiveSubTab] = useState<'distribution' | 'beneficiaries' | 'reserve'>('distribution');
 
   // Real-time data
@@ -230,7 +244,7 @@ export default function DistributionManagementView({
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`operations-view ${embedded ? 'space-y-3' : 'space-y-6'}`}>
       {/* Action Notification Message */}
       {actionMessage && (
         <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-2xl text-xs font-semibold flex items-center justify-between">
@@ -347,46 +361,48 @@ export default function DistributionManagementView({
 
       {/* MONTH SELECTOR & ACTION BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
-        {/* Month Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:inline">
-            হিসাবের মাস:
-          </span>
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={handlePrevMonth}
-              className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs transition-all cursor-pointer"
-              title="পূর্ববর্তী মাস"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-            </button>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="text-xs font-bold text-slate-800 bg-white px-3 py-1 rounded-lg border border-slate-200 outline-hidden"
-            />
-            <button
-              onClick={handleNextMonth}
-              className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs transition-all cursor-pointer"
-              title="পরবর্তী মাস"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
+        {/* Month Selector (hidden when the dashboard owns the month) */}
+        {!embedded && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:inline">
+              হিসাবের মাস:
+            </span>
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              <button
+                onClick={handlePrevMonth}
+                className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+                title="পূর্ববর্তী মাস"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="text-xs font-bold text-slate-800 bg-white px-3 py-1 rounded-lg border border-slate-200 outline-hidden"
+              />
+              <button
+                onClick={handleNextMonth}
+                className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+                title="পরবর্তী মাস"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
+            {selectedMonth !== currentMonthStr && (
+              <button
+                onClick={() => setSelectedMonth(currentMonthStr)}
+                className="text-[11px] font-semibold text-blue-600 hover:underline px-2 py-1 cursor-pointer"
+              >
+                চলতি মাস
+              </button>
+            )}
           </div>
-          {selectedMonth !== currentMonthStr && (
-            <button
-              onClick={() => setSelectedMonth(currentMonthStr)}
-              className="text-[11px] font-semibold text-blue-600 hover:underline px-2 py-1 cursor-pointer"
-            >
-              চলতি মাস
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Global Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">

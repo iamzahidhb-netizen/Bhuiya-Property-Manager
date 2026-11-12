@@ -1,200 +1,82 @@
 /**
- * Xiaomi HyperOS Inspired Frosted Glass Design System Tokens
- * Anwar Bhuiyan Property — Liquid & Frosted Glass Architecture
+ * Shared legacy HyperOS utility selectors.
+ * Values are owned by design-tokens.css; this file contains no token definitions.
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
-  /* Surface & Canvas (Light) */
-  --hyper-bg-canvas: #F2F3F5;
-  --hyper-bg-base: var(--hyper-bg-canvas);
-  --hyper-bg-card: rgba(255, 255, 255, 0.86);
-  --hyper-surface: var(--hyper-bg-card);
-  --hyper-bg-card-subtle: rgba(255, 255, 255, 0.65);
-  --hyper-surface-subtle: var(--hyper-bg-card-subtle);
-  --hyper-bg-card-hover: rgba(255, 255, 255, 0.95);
-  --hyper-bg-glass: rgba(255, 255, 255, 0.72);
-  --hyper-bg-glass-strong: rgba(255, 255, 255, 0.86);
-  --hyper-bg-glass-nav: rgba(255, 255, 255, 0.82);
-  --hyper-bg-modal: #FFFFFF;
-  --hyper-bg-modal-footer: rgba(248, 250, 252, 0.90);
-  --hyper-bg-input: rgba(255, 255, 255, 0.85);
-
-  /* Typography (Light) */
-  --hyper-text-primary: #202124;
-  --hyper-text-secondary: #70757a;
-  --hyper-text-tertiary: #9aa0a6;
-
-  /* Borders & Highlights (Light) */
-  --hyper-border: rgba(255, 255, 255, 0.65);
-  --hyper-border-subtle: rgba(0, 0, 0, 0.07);
-  --hyper-border-glass: rgba(255, 255, 255, 0.55);
-  --hyper-inner-highlight: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9);
-
-  /* Ambient Shadows (Light) */
-  --hyper-shadow-card: 0 2px 4px rgba(0, 0, 0, 0.08);
-  --hyper-shadow-nav: 0 14px 34px -8px rgba(0, 0, 0, 0.12), 0 6px 14px -4px rgba(0, 0, 0, 0.05);
-  --hyper-shadow-modal: 0 24px 50px -12px rgba(0, 0, 0, 0.18), 0 10px 20px -6px rgba(0, 0, 0, 0.08);
-
-  /* Accent Colors (Consistent across themes) */
-  --hyper-green: #22B84A;
-  --hyper-blue: #1685E8;
-  --hyper-orange: #F28A24;
-  --hyper-purple: #7655E8;
-  --hyper-red: #E94B4B;
-
-  /* Accent Tint Backgrounds (Light) */
-  --hyper-green-bg: rgba(34, 184, 74, 0.12);
-  --hyper-blue-bg: rgba(22, 133, 232, 0.12);
-  --hyper-orange-bg: rgba(242, 138, 36, 0.12);
-  --hyper-purple-bg: rgba(118, 85, 232, 0.12);
-  --hyper-red-bg: rgba(233, 75, 75, 0.12);
-
-  /* Radii */
-  --hyper-radius-card: 28px;
-  --hyper-radius-modal: 32px;
-  --hyper-radius-squircle: 18px;
-  --hyper-radius-pill: 9999px;
-}
-
-.dark {
-  /* Surface & Canvas (Dark - Spec v3.1 default: #0B0D10) */
-  --hyper-bg-canvas: #0B0D10;
-  --hyper-bg-base: var(--hyper-bg-canvas);
-  --hyper-bg-card: rgba(24, 26, 31, 0.88);
-  --hyper-surface: var(--hyper-bg-card);
-  --hyper-bg-card-subtle: rgba(34, 37, 43, 0.72);
-  --hyper-surface-subtle: var(--hyper-bg-card-subtle);
-  --hyper-bg-card-hover: rgba(40, 44, 52, 0.95);
-  --hyper-bg-glass: rgba(26, 28, 34, 0.80);
-  --hyper-bg-glass-strong: rgba(30, 33, 40, 0.92);
-  --hyper-bg-glass-nav: rgba(20, 22, 27, 0.88);
-  --hyper-bg-modal: #181A1F;
-  --hyper-bg-modal-footer: rgba(20, 22, 27, 0.95);
-  --hyper-bg-input: rgba(34, 37, 43, 0.85);
-
-  /* Typography (Dark) */
-  --hyper-text-primary: #F5F5F5;
-  --hyper-text-secondary: #A0A0A0;
-  --hyper-text-tertiary: #71717A;
-
-  /* Borders & Highlights (Dark) */
-  --hyper-border: rgba(255, 255, 255, 0.10);
-  --hyper-border-subtle: rgba(255, 255, 255, 0.08);
-  --hyper-border-glass: rgba(255, 255, 255, 0.09);
-  --hyper-inner-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
-
-  /* Ambient Shadows (Dark) */
-  --hyper-shadow-card: 0 2px 4px rgba(0, 0, 0, 0.28);
-  --hyper-shadow-nav: 0 16px 40px -8px rgba(0, 0, 0, 0.8), 0 8px 18px -4px rgba(0, 0, 0, 0.6);
-  --hyper-shadow-modal: 0 28px 60px -12px rgba(0, 0, 0, 0.9), 0 12px 24px -6px rgba(0, 0, 0, 0.7);
-
-  /* Accent Tint Backgrounds (Dark) */
-  --hyper-green-bg: rgba(34, 184, 74, 0.22);
-  --hyper-blue-bg: rgba(22, 133, 232, 0.22);
-  --hyper-orange-bg: rgba(242, 138, 36, 0.22);
-  --hyper-purple-bg: rgba(118, 85, 232, 0.22);
-  --hyper-red-bg: rgba(233, 75, 75, 0.22);
-}
-
-/* Optional OLED Theme Variant (#000000) */
-[data-theme="oled"],
-.dark.theme-oled {
-  --hyper-bg-canvas: #000000;
-  --hyper-bg-base: var(--hyper-bg-canvas);
-  --hyper-bg-card: rgba(18, 18, 20, 0.90);
-  --hyper-surface: var(--hyper-bg-card);
-  --hyper-bg-card-subtle: rgba(24, 24, 28, 0.75);
-  --hyper-bg-modal: #0E0E10;
-  --hyper-bg-modal-footer: rgba(14, 14, 16, 0.96);
-  --hyper-bg-input: rgba(24, 24, 27, 0.90);
-}
-
-/* HyperOS Base Layout Styles */
 body {
-  background-color: var(--hyper-bg-canvas);
-  color: var(--hyper-text-primary);
   min-height: 100vh;
   min-height: 100dvh;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Base Ambient Glow for HyperOS */
+/* Keep the canvas calm; decorative dashboard glow layers are non-essential. */
 .hyper-ambient-bg {
   position: relative;
-  background-color: var(--hyper-bg-canvas);
-  background-image: 
-    radial-gradient(at 15% 10%, rgba(34, 184, 74, 0.07) 0px, transparent 50%),
-    radial-gradient(at 85% 15%, rgba(22, 133, 232, 0.06) 0px, transparent 50%),
-    radial-gradient(at 50% 60%, rgba(34, 184, 74, 0.04) 0px, transparent 65%);
-  background-attachment: fixed;
-  transition: background-color 0.25s ease;
+  background-color: var(--surface-canvas);
+  background-image: none;
 }
 
-.dark .hyper-ambient-bg {
-  background-image: 
-    radial-gradient(at 15% 10%, rgba(34, 184, 74, 0.09) 0px, transparent 50%),
-    radial-gradient(at 85% 15%, rgba(22, 133, 232, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 60%, rgba(118, 85, 232, 0.05) 0px, transparent 65%);
+.hyper-ambient-bg > .fixed[aria-hidden="true"] {
+  display: none;
 }
 
-/* Shared Frosted Glass Rules (Floating Nav, Modal Scrim, FAB) */
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .hyper-glass-nav {
-    background: var(--hyper-bg-glass-nav);
-    backdrop-filter: blur(20px) saturate(1.6);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    background: var(--surface-card-glass);
+    backdrop-filter: blur(8px) saturate(1.05);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
   }
+
   .hyper-modal-scrim {
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgb(15 23 42 / 52%);
   }
+
   .dark .hyper-modal-scrim {
-    background: rgba(0, 0, 0, 0.72);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    background: rgb(0 0 0 / 68%);
   }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .hyper-glass-nav {
-    background: var(--hyper-bg-glass-strong);
+    background: var(--surface-card);
   }
+
   .hyper-modal-scrim {
-    background: rgba(0, 0, 0, 0.75);
+    background: rgb(15 23 42 / 65%);
   }
 }
 
-/* Universal Token Support Classes for All Modals & Views */
 .hyper-modal-sheet {
-  background-color: var(--hyper-bg-modal);
-  border-color: var(--hyper-border);
-  color: var(--hyper-text-primary);
-  box-shadow: var(--hyper-shadow-modal);
+  background-color: var(--surface-modal);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
 }
 
 .hyper-modal-header {
-  border-bottom: 1px solid var(--hyper-border-subtle);
-  background-color: var(--hyper-bg-modal);
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--surface-modal);
 }
 
 .hyper-modal-footer {
-  border-top: 1px solid var(--hyper-border-subtle);
-  background-color: var(--hyper-bg-modal-footer);
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--surface-modal-footer);
 }
 
 .hyper-input-field {
-  background-color: var(--hyper-bg-input);
-  border: 1px solid var(--hyper-border-subtle);
-  color: var(--hyper-text-primary);
-  border-radius: var(--hyper-radius-squircle);
+  background-color: var(--surface-input);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  border-radius: var(--radius-control);
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .hyper-input-field:focus {
-  outline: none;
-  border-color: var(--hyper-green);
-  box-shadow: 0 0 0 3px rgba(34, 184, 74, 0.25);
+  outline: 2px solid transparent;
+  border-color: var(--border-input-focus);
+  box-shadow: 0 0 0 3px var(--color-primary-tint);
 }
